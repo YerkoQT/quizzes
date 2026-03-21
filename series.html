@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<!-- ╔══════════════════════════════════════════════════════════╗
+     TEMPLATE HTML — Mini Quiz Interactivo
+     Yerko Aldair Quispe Ticona · Análisis Numérico 2026
+
+     CAMBIOS YA APLICADOS (no modificar la estructura):
+     ✓ Sin paralelo — solo Nombre y CI
+     ✓ Contraseña individual por quiz (modal al iniciar)
+     ✓ Una sola vez por quiz por CI (localStorage)
+     ✓ Preguntas y opciones en orden aleatorio
+     ✓ Fórmulas LaTeX con MathJax 3 (\( ... \))
+     ✓ Código Python con fondo claro en preguntas
+     ✓ Revisión de respuestas con LaTeX renderizado
+     ✓ GitHub Issues (token via URL: ?token=xxx&repo=usuario/repo)
+     ✓ Exportar CSV · Ranking local
+
+     PARA USAR EN NUEVO TEMA:
+     1. Buscar "TEMA" y reemplazar con el nombre del tema
+     2. Cambiar el emoji de la línea <span class="emoji">
+     3. Cambiar KEY='miniquiz_TEMA_2026' (línea ~980)
+     4. Cambiar las contraseñas (defaults en getQzPassword)
+     5. Reemplazar el bloque const QUIZZES = { ... }
+        con las 10 preguntas del nuevo tema
+     6. Para fórmulas LaTeX usar: \( ecuación \)
+     7. Para código en preguntas usar el campo `code:` del quiz
+     ╚══════════════════════════════════════════════════════════╝ -->
+
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Quiz · Series de Potencia y Stencils · Análisis Numérico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(','\\)'],['$','$']],
+    displayMath: [['\\[','\\]'],['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true
+  },
+  svg: { fontCache: 'global' },
+  options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+/* ═══════════════════════════════════════════════
+   VARIABLES Y RESET
+═══════════════════════════════════════════════ */
+:root{
+  --bg:       #f8f9fa;
+  --bg2:      #ffffff;
+  --bg3:      #f1f3f5;
+  --border:   #dee2e6;
+  --text:     #212529;
+  --muted:    #6c757d;
+  --shadow:   0 2px 12px rgba(0,0,0,.08);
+
+  /* colores de los 10 quizzes (fieles al .tex) */
+  --c1:#E63946; --c1l:#FFF0F0;
+  --c2:#D4762A; --c2l:#FFF6EE;
+  --c3:#2A9D8F; --c3l:#EDFAF8;
+  --c4:#6A0572; --c4l:#F8EEFB;
+  --c5:#1D3557; --c5l:#EEF3FA;
+  --c6:#C45E3A; --c6l:#FDF2EE;
+  --c7:#457B9D; --c7l:#EDF4FA;
+  --c8:#2D6A4F; --c8l:#EEF8F3;
+  --c9:#9B2226; --c9l:#FDECEA;
+  --c10:#3A0CA3;--c10l:#EDE7FB;
+  --codebg:#1E1E2E;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+}
+
+/* ══ QUIZ YA RENDIDO ══ */
+.qsel-btn.done{
+  border-color:#2D6A4F !important;
+  color:#2D6A4F !important;
+  background:#eef8f3 !important;
+  cursor:not-allowed;
+  position:relative;
+}
+.qsel-btn.done::after{
+  content:'✓';
+  position:absolute;
+  top:-6px;right:-6px;
+  width:16px;height:16px;
+  background:#2D6A4F;
+  color:#fff;
+  border-radius:50%;
+  font-size:.6rem;
+  display:flex;align-items:center;justify-content:center;
+  line-height:16px;text-align:center;
+}
+.already-done-warn{
+  display:none;
+  padding:.6rem .9rem;
+  background:#fff3cd;border:1px solid #e67700;border-radius:6px;
+  font-size:.75rem;color:#7c4a00;margin-bottom:.8rem;
+  align-items:center;gap:.5rem;
+}
+.already-done-warn.show{display:flex;}
+.ci-check-note{
+  font-size:.68rem;color:var(--muted);margin-top:.35rem;
+  display:none;
+}
+.ci-check-note.show{display:block;}
+/* ══ PASSWORD MODAL ══ */
+.pw-overlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeup .2s ease;
+}
+.pw-overlay.hidden{display:none;}
+.pw-modal{
+  background:#fff;border-radius:12px;padding:2rem 1.8rem;
+  width:min(90vw,380px);box-shadow:0 8px 40px rgba(0,0,0,.25);
+  text-align:center;
+}
+.pw-icon{font-size:2.2rem;margin-bottom:.6rem;display:block;}
+.pw-title{font-size:1.1rem;font-weight:800;margin-bottom:.2rem;color:var(--text);}
+.pw-sub{font-size:.78rem;color:var(--muted);margin-bottom:1.2rem;}
+.pw-inp{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;padding:.7rem 1rem;text-align:center;
+  font-family:'Inter',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:.15em;
+  outline:none;transition:all .2s;margin-bottom:.8rem;
+}
+.pw-inp:focus{border-color:var(--c5);box-shadow:0 0 0 3px rgba(29,53,87,.12);}
+.pw-inp.error{border-color:var(--c1);animation:shake .3s ease;}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.pw-btn{
+  width:100%;padding:.8rem;border:none;border-radius:8px;
+  font-family:'Inter',sans-serif;font-size:.9rem;font-weight:700;
+  cursor:pointer;transition:all .2s;
+}
+.pw-err{font-size:.75rem;color:var(--c1);margin-top:.4rem;display:none;height:1rem;}
+
+/* ══ END PASSWORD MODAL ══ */
+/* ── CABECERA ── */
+.site-header{
+  background:var(--c5);
+  color:#fff;
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:.5rem;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+.hdr-left{font-size:.75rem;opacity:.85;font-family:'JetBrains Mono',monospace;}
+.hdr-left strong{color:#ffd166;font-size:.85rem;}
+.hdr-right{font-size:.7rem;opacity:.7;text-align:right;}
+
+/* ── WRAP ── */
+.wrap{max-width:780px;margin:0 auto;padding:1.5rem 1rem 4rem;}
+
+/* ── SCREENS ── */
+.screen{display:none;}
+.screen.on{display:block;animation:fadeup .35s ease;}
+@keyframes fadeup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ══════════════════════════════════════
+   PANTALLA REGISTRO
+══════════════════════════════════════ */
+.reg-hero{
+  background:var(--c5);
+  color:#fff;
+  border-radius:12px;
+  padding:2rem 1.5rem 1.5rem;
+  text-align:center;
+  margin-bottom:1.5rem;
+}
+.reg-hero .emoji{font-size:2.8rem;display:block;margin-bottom:.75rem;}
+.reg-hero h1{
+  font-size:clamp(1.4rem,4vw,2rem);
+  font-weight:800;letter-spacing:-.02em;margin-bottom:.3rem;
+}
+.reg-hero h1 span{color:#ffd166;}
+.reg-hero p{font-size:.82rem;opacity:.8;line-height:1.7;}
+.reg-sub{
+  font-size:.7rem;margin-top:.6rem;opacity:.65;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+}
+
+.reg-card{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1.6rem;
+  box-shadow:var(--shadow);
+}
+.reg-card h2{
+  font-size:.9rem;font-weight:700;color:var(--c5);
+  margin-bottom:1.2rem;letter-spacing:.04em;text-transform:uppercase;
+}
+
+.fld{margin-bottom:1rem;}
+.fld label{
+  display:block;font-size:.7rem;font-weight:600;
+  color:var(--muted);letter-spacing:.08em;text-transform:uppercase;
+  margin-bottom:.35rem;
+}
+.fld input,.fld select{
+  width:100%;
+  background:var(--bg3);
+  border:1.5px solid var(--border);
+  border-radius:7px;
+  padding:.65rem .9rem;
+  font-family:'Inter',sans-serif;font-size:.9rem;color:var(--text);
+  outline:none;transition:all .2s;
+}
+.fld input:focus,.fld select:focus{
+  border-color:var(--c5);
+  box-shadow:0 0 0 3px rgba(29,53,87,.12);
+}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+
+/* selector de quizzes */
+.quiz-sel-title{
+  font-size:.7rem;font-weight:600;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem;
+}
+.qsel-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.4rem;margin-bottom:1.1rem;}
+.qsel-btn{
+  padding:.5rem .2rem;border-radius:6px;
+  border:1.5px solid var(--border);background:transparent;
+  font-family:'JetBrains Mono',monospace;font-size:.72rem;
+  color:var(--muted);cursor:pointer;text-align:center;transition:all .18s;
+}
+.qsel-btn.on{border-color:var(--c5);color:var(--c5);background:var(--c5l);}
+
+.gh-info{
+  display:none;margin-bottom:1rem;padding:.5rem .8rem;
+  background:#eef8f3;border:1px solid #2D6A4F;border-radius:6px;
+  font-size:.68rem;color:#2D6A4F;align-items:center;gap:.5rem;
+}
+.gh-info.show{display:flex;}
+
+.err-msg{color:var(--c1);font-size:.75rem;margin-bottom:.8rem;display:none;}
+
+.btn-start{
+  width:100%;padding:.85rem;border:none;border-radius:8px;
+  background:var(--c5);color:#fff;
+  font-family:'Inter',sans-serif;font-size:.9rem;font-weight:700;
+  cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:.5rem;
+}
+.btn-start:hover{background:#162840;box-shadow:0 4px 16px rgba(29,53,87,.3);}
+
+/* ══════════════════════════════════════
+   BARRA SUPERIOR DEL QUIZ
+══════════════════════════════════════ */
+.quiz-topbar{
+  display:flex;align-items:center;gap:.75rem;
+  margin-bottom:1.2rem;flex-wrap:wrap;
+}
+.qz-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.72rem;font-weight:600;white-space:nowrap;
+}
+.prog-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;min-width:60px;}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.timer-badge{
+  font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:600;
+  padding:.28rem .65rem;border-radius:20px;border:1.5px solid var(--border);
+  min-width:46px;text-align:center;transition:all .3s;
+}
+.timer-badge.w{border-color:#e67700;color:#e67700;background:#fff8f0;}
+.timer-badge.u{border-color:var(--c1);color:var(--c1);background:#fff0f0;animation:blink .5s step-end infinite alternate;}
+@keyframes blink{to{opacity:.4}}
+
+/* ══════════════════════════════════════
+   TARJETA DE PREGUNTA
+══════════════════════════════════════ */
+.qcard{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  margin-bottom:1rem;
+  box-shadow:var(--shadow);
+}
+.qcard-header{
+  padding:.6rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.qcard-tag{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.62rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+}
+.qcard-num{font-size:.68rem;color:var(--muted);}
+.qcard-body{padding:1.2rem 1rem;}
+.qtxt{font-size:.92rem;font-weight:600;line-height:1.75;margin-bottom:1.1rem;color:var(--text);}
+.qtxt code{
+  background:#1E1E2E;color:#89DDFF;
+  padding:.12em .4em;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.83em;
+}
+
+/* bloque de código */
+.code-blk{
+  background:#1E1E2E;border-radius:7px;
+  padding:.9rem 1rem;margin-bottom:1rem;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  line-height:1.75;color:#cdd9e5;overflow-x:auto;white-space:pre;
+}
+.kw{color:#89DDFF;font-weight:600;}
+.st{color:#C3E88D;}
+.cm{color:#888;font-style:italic;}
+.nm{color:#F78C6C;}
+
+/* ── opciones múltiple ── */
+.opts{display:flex;flex-direction:column;gap:.5rem;}
+.opt-btn{
+  display:flex;align-items:flex-start;gap:.75rem;
+  padding:.75rem .9rem;
+  background:var(--bg3);border:1.5px solid var(--border);border-radius:7px;
+  cursor:pointer;text-align:left;font-family:'Inter',sans-serif;
+  font-size:.84rem;line-height:1.55;color:var(--text);
+  transition:all .16s;width:100%;
+}
+.opt-btn:hover:not(:disabled){border-color:rgba(29,53,87,.4);background:#eef3fa;transform:translateX(3px);}
+.opt-key{
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:600;
+  color:var(--muted);min-width:20px;background:var(--border);
+  border-radius:3px;padding:.1em .35em;text-align:center;flex-shrink:0;margin-top:1px;
+}
+.opt-btn.sel{border-color:var(--c5);background:var(--c5l);}
+.opt-btn.sel .opt-key{background:var(--c5);color:#fff;}
+.opt-btn.ok{border-color:#2D6A4F;background:#eef8f3;pointer-events:none;}
+.opt-btn.ok .opt-key{background:#2D6A4F;color:#fff;}
+.opt-btn.ko{border-color:var(--c1);background:#fff0f0;pointer-events:none;}
+.opt-btn.ko .opt-key{background:var(--c1);color:#fff;}
+.opt-btn:disabled{cursor:default;}
+
+/* ── V/F ── */
+.vf-row{display:flex;gap:.6rem;}
+.vf-btn{
+  flex:1;padding:.65rem;border-radius:7px;border:1.5px solid var(--border);
+  background:var(--bg3);font-family:'Inter',sans-serif;
+  font-size:.88rem;font-weight:700;color:var(--muted);
+  cursor:pointer;text-align:center;transition:all .18s;
+}
+.vf-btn:hover:not(:disabled){border-color:#e67700;color:#e67700;background:#fff8f0;}
+.vf-btn.sel{border-color:#e67700;color:#e67700;background:#fff8f0;}
+.vf-btn.ok{border-color:#2D6A4F;color:#2D6A4F;background:#eef8f3;pointer-events:none;}
+.vf-btn.ko{border-color:var(--c1);color:var(--c1);background:#fff0f0;pointer-events:none;}
+.vf-btn:disabled{cursor:default;}
+
+/* ── completar ── */
+.fill-inp{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:7px;padding:.65rem .9rem;
+  font-family:'Inter',sans-serif;font-size:.88rem;color:var(--text);
+  outline:none;transition:all .2s;margin-top:.4rem;
+}
+.fill-inp:focus{border-color:#e67700;box-shadow:0 0 0 3px rgba(230,119,0,.1);}
+.fill-inp:disabled{opacity:.6;cursor:default;}
+.fill-submit{
+  margin-top:.5rem;padding:.55rem 1.2rem;
+  border:1.5px solid var(--c5);border-radius:7px;
+  background:transparent;color:var(--c5);
+  font-family:'Inter',sans-serif;font-size:.78rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.fill-submit:hover{background:var(--c5l);}
+
+/* ── feedback ── */
+.fb-box{
+  display:none;margin-top:.75rem;padding:.8rem 1rem;
+  border-radius:7px;border:1px solid;font-size:.8rem;line-height:1.65;
+  gap:.6rem;
+}
+.fb-box.show{display:flex;animation:fadeup .25s ease;}
+.fb-box.ok{border-color:#2D6A4F;background:#eef8f3;color:#2D6A4F;}
+.fb-box.ko{border-color:var(--c1);background:#fff0f0;color:var(--c1);}
+.fb-ico{font-size:.95rem;flex-shrink:0;margin-top:1px;}
+
+/* nav */
+.qnav{display:flex;align-items:center;justify-content:flex-end;gap:.7rem;margin-top:.5rem;}
+.live-score{font-size:.72rem;color:var(--muted);margin-right:auto;}
+.live-score strong{color:#2D6A4F;}
+
+.btn-next{
+  padding:.65rem 1.3rem;border:1.5px solid var(--border);border-radius:7px;
+  background:var(--bg2);color:var(--text);
+  font-family:'Inter',sans-serif;font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.btn-next:hover:not(:disabled){border-color:var(--c5);color:var(--c5);}
+.btn-next:disabled{opacity:.35;cursor:default;}
+
+/* ══════════════════════════════════════
+   RESULTADOS
+══════════════════════════════════════ */
+.res-top{
+  text-align:center;padding:2rem 0 1.5rem;
+  border-bottom:1px solid var(--border);margin-bottom:1.5rem;
+}
+.grade-ring{
+  width:120px;height:120px;border-radius:50%;
+  border:4px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
+  margin:0 auto 1.1rem;transition:all .4s;
+}
+.grade-ring.pass{border-color:#2D6A4F;box-shadow:0 0 28px rgba(45,106,79,.2);}
+.grade-ring.fail{border-color:var(--c1);box-shadow:0 0 20px rgba(230,57,70,.15);}
+.gpct{font-size:2.1rem;font-weight:800;letter-spacing:-.04em;line-height:1;}
+.gpct.pass{color:#2D6A4F;}
+.gpct.fail{color:var(--c1);}
+.gsub{font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-top:.15rem;font-family:'JetBrains Mono',monospace;}
+.sname{font-size:1rem;font-weight:700;margin-bottom:.25rem;}
+.sci{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;font-family:'JetBrains Mono',monospace;}
+.verd{
+  font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  padding:.3rem 1rem;border-radius:20px;display:inline-block;margin-top:.3rem;
+}
+.verd.pass{background:#eef8f3;color:#2D6A4F;border:1px solid rgba(45,106,79,.3);}
+.verd.fail{background:#fff0f0;color:var(--c1);border:1px solid rgba(230,57,70,.3);}
+
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1.4rem;}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.85rem;text-align:center;}
+.stat-v{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:700;display:block;margin-bottom:.15rem;}
+.stat-l{font-size:.6rem;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;}
+
+/* por-quiz scores */
+.qz-row{display:grid;grid-template-columns:repeat(5,1fr);gap:.45rem;margin-bottom:1.3rem;}
+.qzs{border-radius:7px;padding:.6rem .3rem;text-align:center;border:1px solid var(--border);}
+.qzs-label{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.2rem;}
+.qzs-val{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;}
+
+/* revisión */
+.sec-title{
+  font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin:1.3rem 0 .65rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.rev-item{
+  background:var(--bg2);border:1px solid var(--border);
+  border-left:3px solid var(--border);border-radius:8px;
+  padding:.9rem 1rem;margin-bottom:.55rem;
+}
+.rev-item.ok{border-left-color:#2D6A4F;}
+.rev-item.ko{border-left-color:var(--c1);}
+.rev-q{font-size:.8rem;line-height:1.5;margin-bottom:.4rem;}
+.rev-ans{font-size:.73rem;display:flex;gap:.9rem;flex-wrap:wrap;}
+.rev-yours{color:var(--muted);}
+.rev-corr{color:#2D6A4F;font-weight:600;}
+.rev-expl{font-size:.72rem;color:var(--c5);margin-top:.35rem;line-height:1.5;font-style:italic;}
+
+/* ranking */
+.lb-row{
+  display:flex;align-items:center;gap:.9rem;
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:.65rem .9rem;margin-bottom:.4rem;font-size:.78rem;
+}
+.lb-row.me{border-color:var(--c5);background:var(--c5l);}
+.lb-rank{font-family:'JetBrains Mono',monospace;font-size:.78rem;font-weight:700;min-width:24px;}
+.lb-name{flex:1;font-weight:600;}
+.lb-meta{font-size:.65rem;color:var(--muted);}
+.lb-nota{font-family:'JetBrains Mono',monospace;font-size:.9rem;font-weight:700;min-width:48px;text-align:right;}
+.lb-nota.pass{color:#2D6A4F;}
+.lb-nota.fail{color:var(--c1);}
+
+/* gh status */
+.gh-status{
+  display:flex;align-items:center;gap:.5rem;
+  font-size:.65rem;color:var(--muted);padding:.45rem .8rem;
+  background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-bottom:.8rem;
+}
+.gh-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+
+/* action row */
+.actrow{display:flex;gap:.6rem;margin-top:1.5rem;flex-wrap:wrap;}
+.btn-act{
+  padding:.7rem 1.3rem;border:1.5px solid var(--border);border-radius:7px;
+  background:var(--bg2);color:var(--text);
+  font-family:'Inter',sans-serif;font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.btn-act:hover{border-color:var(--c5);color:var(--c5);}
+.btn-act.primary{background:var(--c5);color:#fff;border-color:var(--c5);flex:1;min-width:160px;justify-content:center;}
+.btn-act.primary:hover{background:#162840;}
+
+/* footer */
+.page-footer{
+  text-align:center;padding:.75rem;
+  font-size:.65rem;color:var(--muted);
+  font-family:'JetBrains Mono',monospace;
+  border-top:1px solid var(--border);margin-top:2rem;
+}
+
+@media(max-width:520px){
+  .stats-grid,.qz-row{grid-template-columns:repeat(2,1fr);}
+  .fld-row{grid-template-columns:1fr;}
+  .qsel-grid{grid-template-columns:repeat(5,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- ── CABECERA ── -->
+<header class="site-header">
+  <div class="hdr-left">
+    <strong>Mini Quiz</strong> · Series de Potencia y Stencils · Análisis Numérico
+  </div>
+  <div class="hdr-right">Yerko Aldair Quispe Ticona</div>
+</header>
+
+<div class="wrap">
+
+<!-- ════════════════════════════════════
+     PANTALLA: REGISTRO
+════════════════════════════════════ -->
+<div class="screen on" id="s-reg">
+
+  <div class="reg-hero">
+    <span class="emoji">📐</span>
+    <h1>Mini Quiz<br><span>Series de Potencia y Stencils</span></h1>
+    <p>10 quizzes · ~5 min por quiz</p>
+    <p style="font-size:.72rem;opacity:.65;margin-top:.3rem;">🔐 Cada quiz tiene contraseña individual</p>
+    <div class="reg-sub">Series &amp; Stencils · Análisis Numérico · Gestión 2026</div>
+  </div>
+
+  <div class="reg-card">
+    <h2>📋 Datos del Estudiante</h2>
+
+    <div class="fld">
+      <label>Nombre y Apellido</label>
+      <input id="i-name" type="text" placeholder="Ej: Juan Carlos Mamani Flores">
+    </div>
+
+    <div class="fld">
+      <label>Carnet de Identidad (CI)</label>
+      <input id="i-ci" type="text" placeholder="Ej: 12345678" oninput="updateDoneBadges()">
+    </div>
+
+    <div class="quiz-sel-title">Seleccionar Quiz(zes) a rendir</div>
+    <div class="qsel-grid">
+      <button class="qsel-btn"    onclick="toggleQ(this,1)">Q1</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,2)">Q2</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,3)">Q3</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,4)">Q4</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,5)">Q5</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,6)">Q6</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,7)">Q7</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,8)">Q8</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,9)">Q9</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,10)">Q10</button>
+    </div>
+
+    <!-- Badge GitHub (aparece si hay token en la URL) -->
+    <div class="gh-info" id="gh-info">
+      <span>✓</span><span>Notas se guardarán automáticamente en GitHub</span>
+    </div>
+
+    <!-- Aviso quizzes ya rendidos -->
+    <div class="already-done-warn" id="already-warn">
+      <span>⚠</span>
+      <span id="already-warn-txt">Ya rendiste algunos de los quizzes seleccionados.</span>
+    </div>
+    <div class="ci-check-note" id="ci-note">
+      Ingresa tu CI para ver qué quizzes ya rendiste.
+    </div>
+
+    <p class="err-msg" id="reg-err">⚠ Por favor completa todos los campos.</p>
+    <button class="btn-start" onclick="begin()">▶ &nbsp;Comenzar Quiz</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     PANTALLA: QUIZ
+════════════════════════════════════ -->
+<div class="screen" id="s-quiz">
+  <div class="quiz-topbar">
+    <div class="qz-label" id="qz-label">Q1 · P1</div>
+    <div class="prog-track">
+      <div class="prog-fill" id="prog-fill" style="width:0%"></div>
+    </div>
+    <div class="timer-badge" id="timer-badge">5:00</div>
+  </div>
+
+  <div class="qcard" id="qcard">
+    <div class="qcard-header">
+      <span class="qcard-tag" id="qtag">Opción Múltiple</span>
+      <span class="qcard-num" id="qnum">Pregunta 1 de 4</span>
+    </div>
+    <div class="qcard-body">
+      <div class="qtxt" id="qtxt"></div>
+      <div id="qcode" style="display:none"></div>
+      <div id="qbody"></div>
+      <div class="fb-box" id="fb-box">
+        <div class="fb-ico" id="fb-ico"></div>
+        <div id="fb-txt"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qnav">
+    <div class="live-score">Aciertos: <strong id="live">0</strong></div>
+    <button class="btn-next" id="btn-next" onclick="nextQ()" disabled>Siguiente →</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     PANTALLA: RESULTADOS
+════════════════════════════════════ -->
+<div class="screen" id="s-res">
+
+  <div class="res-top">
+    <div class="grade-ring" id="grade-ring">
+      <div class="gpct" id="gpct"></div>
+      <div class="gsub">NOTA</div>
+    </div>
+    <div class="sname" id="res-name"></div>
+    <div class="sci"   id="res-ci"></div>
+    <div class="verd"  id="res-verd"></div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat"><span class="stat-v" id="rs-ok">0</span><div class="stat-l">Correctas</div></div>
+    <div class="stat"><span class="stat-v" id="rs-ko">0</span><div class="stat-l">Incorrectas</div></div>
+    <div class="stat"><span class="stat-v" id="rs-tot">0</span><div class="stat-l">Total Px</div></div>
+    <div class="stat"><span class="stat-v" id="rs-t">0s</span><div class="stat-l">Tiempo</div></div>
+  </div>
+
+  <div class="sec-title">Puntaje por Quiz</div>
+  <div class="qz-row" id="qz-scores"></div>
+
+  <div class="sec-title">Estado GitHub</div>
+  <div class="gh-status">
+    <div class="gh-dot" id="gh-dot"></div>
+    <span id="gh-msg">Sin token configurado — notas guardadas localmente.</span>
+  </div>
+
+  <div class="sec-title">Revisión de Respuestas</div>
+  <div id="rev-list"></div>
+
+  <div class="sec-title">Registro de Notas</div>
+  <div id="lb-list"></div>
+
+  <div class="actrow">
+    <button class="btn-act primary" onclick="retry()">↺ &nbsp;Nuevo Intento</button>
+    <button class="btn-act" onclick="doCSV()">⬇ CSV</button>
+    <button class="btn-act" onclick="doClr()">🗑 Limpiar</button>
+  </div>
+
+</div>
+
+<div class="page-footer">
+  Mini Quiz · Series de Potencia y Stencils · Análisis Numérico 2026<br>
+  Elaborado por Yerko Aldair Quispe Ticona
+</div>
+
+</div><!-- /wrap -->
+
+<!-- ════ MODAL CONTRASEÑA ════ -->
+<div class="pw-overlay hidden" id="pw-overlay">
+  <div class="pw-modal">
+    <span class="pw-icon" id="pw-icon">🔐</span>
+    <div class="pw-title" id="pw-title">Contraseña requerida</div>
+    <div class="pw-sub" id="pw-sub">Ingresa la contraseña para acceder al quiz</div>
+    <input class="pw-inp" id="pw-inp" type="password"
+      placeholder="••••••"
+      onkeydown="if(event.key==='Enter') checkPassword()">
+    <button class="pw-btn" id="pw-btn" onclick="checkPassword()">
+      Ingresar →
+    </button>
+    <div class="pw-err" id="pw-err">⚠ Contraseña incorrecta</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  COLORES POR QUIZ (fieles al .tex)
+// ══════════════════════════════════════════════════════════
+const QZ_COLORS = {
+  1:'#E63946', 2:'#D4762A', 3:'#2A9D8F', 4:'#6A0572', 5:'#1D3557',
+  6:'#C45E3A', 7:'#457B9D', 8:'#2D6A4F', 9:'#9B2226', 10:'#3A0CA3'
+};
+const QZ_COLORS_L = {
+  1:'#FFF0F0', 2:'#FFF6EE', 3:'#EDFAF8', 4:'#F8EEFB', 5:'#EEF3FA',
+  6:'#FDF2EE', 7:'#EDF4FA', 8:'#EEF8F3', 9:'#FDECEA', 10:'#EDE7FB'
+};
+
+// ══════════════════════════════════════════════════════════
+//  BANCO DE PREGUNTAS — REEMPLAZAR CON EL NUEVO TEMA
+//  Estructura de cada quiz:
+//    type:"mc"   → opción múltiple (opts:[a,b,c,d], ok: índice 0-3)
+//    type:"vf"   → verdadero/falso (ok: true o false)
+//    code:`...`  → bloque de código (solo en Q con código, primer qIdx)
+//    fb:"..."    → feedback con LaTeX usando \\( ... \\)
+// ══════════════════════════════════════════════════════════
+const QUIZZES = {
+1:{
+  title:"Series de Potencias: Funciones Trigonométricas",
+  qs:[
+    {type:"mc",
+     txt:"La serie de Taylor de \\(\\sin(x)\\) entorno a \\(x_0=0\\) es:",
+     opts:["\\(\\displaystyle\\sum_{n=0}^{\\infty}\\frac{x^{2n}}{(2n)!}\\)",
+           "\\(\\displaystyle\\sum_{n=0}^{\\infty}\\frac{(-1)^n x^{2n+1}}{(2n+1)!}\\)",
+           "\\(\\displaystyle\\sum_{n=0}^{\\infty}\\frac{(-1)^n x^{2n}}{(2n)!}\\)",
+           "\\(\\displaystyle\\sum_{n=0}^{\\infty}\\frac{x^{2n+1}}{(2n+1)!}\\)"],
+     ok:1,
+     fb:"\\(\\sin(x)=x-\\frac{x^3}{3!}+\\frac{x^5}{5!}-\\cdots=\\sum_{n=0}^{\\infty}\\frac{(-1)^n x^{2n+1}}{(2n+1)!}\\). Solo potencias <em>impares</em>, signos alternantes."},
+    {type:"mc",
+     txt:"El radio de convergencia de la serie de \\(\\tan(x)\\) entorno a \\(x_0=0\\) es:",
+     opts:["\\(R=\\infty\\)","\\(R=\\pi\\)","\\(R=\\pi/2\\)","\\(R=1\\)"],
+     ok:2,
+     fb:"\\(\\tan(x)\\) tiene singularidades en \\(x=\\pm\\pi/2\\), \\(\\pm 3\\pi/2,\\ldots\\) La primera está a distancia \\(\\pi/2\\) del origen → \\(R=\\pi/2\\)."},
+    {type:"vf",
+     txt:"Las series de \\(\\sin(x)\\) y \\(\\cos(x)\\) tienen radio de convergencia infinito, es decir, convergen para todo \\(x\\in\\mathbb{R}\\).",
+     ok:true,
+     fb:"VERDADERO. Ambas series convergen absolutamente para todo \\(x\\in\\mathbb{R}\\). El cociente \\(|a_{n+1}/a_n|\\to 0\\) cuando \\(n\\to\\infty\\), por el criterio de la razón."},
+    {type:"vf",
+     txt:"La serie de Taylor de \\(\\cos(x)\\) solo contiene potencias <em>pares</em> de \\(x\\), ya que \\(\\cos(x)\\) es una función par.",
+     ok:true,
+     fb:"VERDADERO. Para funciones pares \\(f(-x)=f(x)\\), todos los coeficientes de potencias impares son cero. \\(\\cos(x)=1-x^2/2!+x^4/4!-\\cdots\\)"}
+  ]
+},
+2:{
+  title:"Series de Potencias: Funciones Hiperbólicas",
+  qs:[
+    {type:"mc",
+     txt:"¿En qué se diferencia la serie de \\(\\sinh(x)\\) de la de \\(\\sin(x)\\)?",
+     opts:["Son idénticas",
+           "\\(\\sinh(x)\\) solo tiene potencias pares",
+           "\\(\\sinh(x)\\) no tiene signos alternantes \\((-1)^n\\)",
+           "\\(\\sinh(x)\\) converge solo para \\(|x|<1\\)"],
+     ok:2,
+     fb:"\\(\\sin(x)=\\sum\\frac{(-1)^n x^{2n+1}}{(2n+1)!}\\) vs \\(\\sinh(x)=\\sum\\frac{x^{2n+1}}{(2n+1)!}\\). Misma estructura pero sin los signos \\((-1)^n\\)."},
+    {type:"mc",
+     txt:"La serie de \\(\\cosh(x)\\) entorno a \\(x_0=0\\) comienza con:",
+     opts:["\\(x+x^3/6+\\cdots\\)",
+           "\\(1+x^2/2!+x^4/4!+\\cdots\\)",
+           "\\(1-x^2/2!+x^4/4!-\\cdots\\)",
+           "\\(x-x^3/3!+x^5/5!-\\cdots\\)"],
+     ok:1,
+     fb:"\\(\\cosh(x)=1+x^2/2!+x^4/4!+\\cdots\\) Solo potencias pares, sin signos alternantes. Es la análoga hiperbólica de \\(\\cos(x)\\)."},
+    {type:"vf",
+     txt:"Se cumple que \\(\\sinh(x)=-i\\,\\sin(ix)\\) y \\(\\cosh(x)=\\cos(ix)\\), lo que explica la similitud entre sus series (sin los signos alternantes).",
+     ok:true,
+     fb:"VERDADERO. Sustituyendo \\(x\\to ix\\) en \\(\\sin\\): \\(\\sin(ix)=ix+\\frac{(ix)^3}{3!}+\\cdots=i\\sinh(x)\\), por lo que \\(\\sinh(x)=-i\\sin(ix)\\)."},
+    {type:"vf",
+     txt:"La función \\(\\tanh(x)\\) tiene singularidades en \\(x=\\pm\\pi/2\\), igual que \\(\\tan(x)\\).",
+     ok:false,
+     fb:"FALSO. \\(\\tanh(x)=\\sinh(x)/\\cosh(x)\\) y \\(\\cosh(x)>0\\) para todo \\(x\\in\\mathbb{R}\\), así que \\(\\tanh(x)\\) es entera (sin singularidades reales). Las singularidades de \\(\\tanh\\) son complejas: \\(x=i(\\pi/2+n\\pi)\\)."}
+  ]
+},
+3:{
+  title:"Límites y Funciones Analíticas",
+  qs:[
+    {type:"mc",
+     txt:"\\(\\displaystyle\\lim_{x\\to 0}\\frac{\\sin(x)}{x}\\) vale:",
+     opts:["\\(0\\)","\\(\\infty\\)","\\(1\\)","Indeterminado"],
+     ok:2,
+     fb:"Por la serie: \\(\\frac{\\sin x}{x}=\\frac{x-x^3/6+\\cdots}{x}=1-x^2/6+\\cdots\\to 1\\) cuando \\(x\\to 0\\). El límite es \\(1\\)."},
+    {type:"mc",
+     txt:"\\(\\displaystyle\\lim_{x\\to 0}\\frac{1}{\\cosh^2(x)}\\) vale:",
+     opts:["\\(0\\)","\\(1\\)","\\(\\infty\\)","\\(1/2\\)"],
+     ok:1,
+     fb:"\\(\\cosh(0)=1\\), por tanto \\(1/\\cosh^2(0)=1/1=1\\). Confirmado por la serie: \\(1/\\cosh^2 x=1-x^2+\\cdots\\to 1\\)."},
+    {type:"vf",
+     txt:"La función \\(\\mathrm{sinc}(x)=\\sin(x)/x\\) es analítica en \\(x=0\\) si se define \\(\\mathrm{sinc}(0)=1\\) mediante continuación analítica.",
+     ok:true,
+     fb:"VERDADERO. La singularidad en \\(x=0\\) es <em>removible</em>: \\(\\lim_{x\\to 0}\\mathrm{sinc}(x)=1\\). Definiendo \\(\\mathrm{sinc}(0)=1\\), la función es entera."},
+    {type:"vf",
+     txt:"La serie de potencias de \\(1/\\cosh^2(x)\\) entorno a \\(x=0\\) comienza con \\(1-x^2+\\cdots\\), confirmando que el límite en \\(x\\to 0\\) es 1.",
+     ok:true,
+     fb:"VERDADERO. \\(\\cosh^2 x=(1+x^2/2+\\cdots)^2=1+x^2+\\cdots\\), entonces \\(1/\\cosh^2 x=1-x^2+\\cdots\\to 1\\)."}
+  ]
+},
+4:{
+  title:"3-Point Stencil: Diferencias Finitas Centradas",
+  qs:[
+    {type:"mc",
+     txt:"La fórmula de diferencia centrada para \\(f'(x)\\) con 3 puntos es:",
+     opts:["\\(\\dfrac{f(x+h)-f(x)}{h}\\)",
+           "\\(\\dfrac{f(x+h)-f(x-h)}{2h}\\)",
+           "\\(\\dfrac{f(x+h)-2f(x)+f(x-h)}{h^2}\\)",
+           "\\(\\dfrac{-f(x+h)+4f(x)-3f(x-h)}{2h}\\)"],
+     ok:1,
+     fb:"Restando las series de Taylor: \\(f(x+h)-f(x-h)=2hf'+\\mathcal{O}(h^3)\\Rightarrow f'\\approx\\frac{f(x+h)-f(x-h)}{2h}\\), error \\(\\mathcal{O}(h^2)\\)."},
+    {type:"mc",
+     txt:"La fórmula de diferencia centrada para \\(f''(x)\\) con 3 puntos es:",
+     opts:["\\(\\dfrac{f(x+h)-f(x-h)}{2h}\\)",
+           "\\(\\dfrac{f(x+h)+f(x-h)}{h^2}\\)",
+           "\\(\\dfrac{f(x+h)-2f(x)+f(x-h)}{h^2}\\)",
+           "\\(\\dfrac{f(x+h)+2f(x)+f(x-h)}{h^2}\\)"],
+     ok:2,
+     fb:"Sumando las series: \\(f(x+h)+f(x-h)=2f+h^2f''+\\mathcal{O}(h^4)\\Rightarrow f''\\approx\\frac{f(x+h)-2f+f(x-h)}{h^2}\\), error \\(\\mathcal{O}(h^2)\\)."},
+    {type:"vf",
+     txt:"Las fórmulas del 3-point stencil para \\(f'\\) y \\(f''\\) tienen ambas error de truncamiento \\(\\mathcal{O}(h^2)\\).",
+     ok:true,
+     fb:"VERDADERO. Ambas se obtienen del desarrollo de Taylor conservando términos hasta \\(h^2\\), por lo que el primer término descartado es \\(\\mathcal{O}(h^2)\\)."},
+    {type:"vf",
+     txt:"Con el 3-point stencil se puede obtener una aproximación directa de la tercera derivada \\(f'''(x)\\) con error \\(\\mathcal{O}(h^2)\\).",
+     ok:false,
+     fb:"FALSO. El 3-point stencil solo aproxima \\(f'\\) y \\(f''\\). Para \\(f'''\\) se necesita al menos un 5-point stencil (o diferencias hacia adelante/atrás con más puntos)."}
+  ]
+},
+5:{
+  title:"5-Point Stencil",
+  qs:[
+    {type:"mc",
+     txt:"La fórmula del 5-point stencil para \\(f'(x)\\) con error \\(\\mathcal{O}(h^4)\\) es:",
+     opts:["\\(\\dfrac{f_{+1}-f_{-1}}{2h}\\)",
+           "\\(\\dfrac{-f_{+2}+8f_{+1}-8f_{-1}+f_{-2}}{12h}\\)",
+           "\\(\\dfrac{f_{+2}-2f_{+1}+2f_{-1}-f_{-2}}{2h^3}\\)",
+           "\\(\\dfrac{-f_{+2}+16f_{+1}-30f+16f_{-1}-f_{-2}}{12h^2}\\)"],
+     ok:1,
+     fb:"La fórmula \\((-f_{+2}+8f_{+1}-8f_{-1}+f_{-2})/(12h)\\) cancela los términos \\(f'''\\) y \\(f^{(5)}\\), logrando error \\(\\mathcal{O}(h^4)\\)."},
+    {type:"mc",
+     txt:"¿Hasta qué orden de derivada se puede aproximar con el 5-point stencil?",
+     opts:["2da derivada","3era derivada","4ta derivada","6ta derivada"],
+     ok:2,
+     fb:"Con 5 puntos se tienen 5 ecuaciones (expandiendo Taylor), que permiten resolver hasta la 4ta derivada \\(f^{(4)}\\). Las fórmulas para \\(f'''\\) y \\(f^{(4)}\\) tienen error \\(\\mathcal{O}(h^2)\\)."},
+    {type:"vf",
+     txt:"En el 5-point stencil, la fórmula para \\(f''(x)\\) tiene error \\(\\mathcal{O}(h^4)\\), mientras que las fórmulas para \\(f'''\\) y \\(f^{(4)}\\) tienen error \\(\\mathcal{O}(h^2)\\).",
+     ok:true,
+     fb:"VERDADERO. Al usar la antisimetría (resta) y simetría (suma) de los 4 puntos \\(\\pm h, \\pm 2h\\), se cancelan más términos para \\(f'\\) y \\(f''\\) que para \\(f'''\\) y \\(f^{(4)}\\)."},
+    {type:"vf",
+     txt:"El 5-point stencil es siempre más preciso que el 3-point stencil para cualquier derivada y cualquier valor de \\(h\\).",
+     ok:false,
+     fb:"FALSO. Para \\(h\\) muy pequeño (\\(h<10^{-4}\\)), el error de redondeo en punto flotante puede dominar y el 5-point stencil puede ser menos preciso que el 3-point en la práctica."}
+  ]
+},
+6:{
+  title:"7-Point Stencil",
+  qs:[
+    {type:"mc",
+     txt:"Con el 7-point stencil, ¿hasta qué orden de derivada se puede acceder?",
+     opts:["4ta derivada","5ta derivada","6ta derivada","8va derivada"],
+     ok:2,
+     fb:"Con 7 puntos (incluyendo el central) se tienen 7 ecuaciones → se puede resolver hasta la 6ta derivada. Las primeras dos tienen orden \\(\\mathcal{O}(h^6)\\)."},
+    {type:"mc",
+     txt:"El orden de precisión del 7-point stencil para \\(f'(x)\\) es:",
+     opts:["\\(\\mathcal{O}(h^2)\\)","\\(\\mathcal{O}(h^4)\\)","\\(\\mathcal{O}(h^6)\\)","\\(\\mathcal{O}(h^8)\\)"],
+     ok:2,
+     fb:"Con los 6 puntos \\(\\pm h, \\pm 2h, \\pm 3h\\) se pueden cancelar hasta los términos \\(h^5\\) en la diferencia → error \\(\\mathcal{O}(h^6)\\)."},
+    {type:"vf",
+     txt:"En el 7-point stencil, las fórmulas para la 5ta y 6ta derivadas tienen el mismo orden de precisión \\(\\mathcal{O}(h^2)\\) que el 3-point stencil para la 1era derivada.",
+     ok:true,
+     fb:"VERDADERO. Al usar los 7 puntos para derivadas de orden alto (5 y 6), quedan pocos grados de libertad para cancelar términos de error → \\(\\mathcal{O}(h^2)\\) como el 3-point básico."},
+    {type:"vf",
+     txt:"Con el 7-point stencil se puede aproximar \\(f^{(6)}(x)\\) con error \\(\\mathcal{O}(h^6)\\).",
+     ok:false,
+     fb:"FALSO. La 6ta derivada en el 7-point stencil tiene error \\(\\mathcal{O}(h^2)\\), no \\(\\mathcal{O}(h^6)\\). Solo \\(f'\\) y \\(f''\\) alcanzan \\(\\mathcal{O}(h^6)\\) con este stencil."}
+  ]
+},
+7:{
+  title:"Fórmula General de Taylor y Series",
+  qs:[
+    {type:"mc",
+     txt:"La fórmula \\(f(x')=\\exp\\!\\left\\{(x'-x)\\frac{d}{dx}\\right\\}f(x)\\) al desarrollar la exponencial produce:",
+     opts:["\\(f(x')=f(x)\\cdot e^{x'-x}\\)",
+           "\\(f(x')=\\displaystyle\\sum_{n=0}^{\\infty}\\frac{(x'-x)^n}{n!}f^{(n)}(x)\\)",
+           "\\(f(x')=f(x)+(x'-x)\\)",
+           "\\(f(x')=(x'-x)f'(x)\\)"],
+     ok:1,
+     fb:"\\(e^{\\alpha D}=\\sum_{n=0}^\\infty\\frac{(\\alpha D)^n}{n!}=\\sum_{n=0}^\\infty\\frac{\\alpha^n}{n!}\\frac{d^n}{dx^n}\\). Aplicando a \\(f(x)\\) con \\(\\alpha=x'-x\\): fórmula de Taylor."},
+    {type:"mc",
+     txt:"Al <strong>sumar</strong> \\(f(x+h)\\) y \\(f(x-h)\\) mediante sus series de Taylor, ¿qué términos sobreviven?",
+     opts:["Solo los términos con potencias impares de \\(h\\)",
+           "Solo los términos con potencias pares de \\(h\\)",
+           "Todos los términos",
+           "Solo el término constante \\(2f(x)\\)"],
+     ok:1,
+     fb:"\\(f(x+h)+f(x-h)=2f+h^2f''+\\frac{h^4}{12}f^{(4)}+\\cdots\\) Los términos impares \\((hf', h^3f'''/6,\\ldots)\\) se cancelan por el signo."},
+    {type:"vf",
+     txt:"Restando \\(f(x-h)\\) de \\(f(x+h)\\), los términos con potencias pares de \\(h\\) se cancelan, dejando solo las derivadas impares.",
+     ok:true,
+     fb:"VERDADERO. \\(f(x+h)-f(x-h)=2hf'+\\frac{h^3}{3}f'''+\\cdots\\) Solo quedan \\(f', f''', f^{(5)},\\ldots\\) Esto es la base de las diferencias centradas antisímetricas."},
+    {type:"vf",
+     txt:"Mientras más términos se incluyan en la serie de Taylor de \\(\\sin(x)\\), la aproximación mejora para todo \\(x\\), ya que \\(R=\\infty\\).",
+     ok:true,
+     fb:"VERDADERO. Radio de convergencia infinito significa que la serie converge para todo \\(x\\in\\mathbb{R}\\). Con suficientes términos, el error es arbitrariamente pequeño."}
+  ]
+},
+8:{
+  title:"Convergencia y Comparación de Stencils",
+  qs:[
+    {type:"mc",
+     txt:"Si se reduce \\(h\\) a la mitad, el error del 5-point stencil para \\(f'\\) se reduce por un factor de:",
+     opts:["\\(2\\)","\\(4\\)","\\(8\\)","\\(16\\)"],
+     ok:3,
+     fb:"Error \\(\\mathcal{O}(h^4)\\): si \\(h\\to h/2\\), error \\(\\to (h/2)^4=h^4/16\\). El error se divide entre \\(16\\)."},
+    {type:"mc",
+     txt:"¿Cuántos puntos usa el 7-point stencil para calcular una derivada en \\(x\\)?",
+     opts:["5 puntos: \\(x,x\\pm h,x\\pm 2h\\)",
+           "7 puntos: \\(x,x\\pm h,x\\pm 2h,x\\pm 3h\\)",
+           "6 puntos: \\(x\\pm h,x\\pm 2h,x\\pm 3h\\)",
+           "8 puntos"],
+     ok:1,
+     fb:"El 7-point stencil usa el punto central \\(x\\) más los 3 pares \\(\\pm h,\\pm 2h,\\pm 3h\\) → 7 puntos en total."},
+    {type:"vf",
+     txt:"Un stencil de mayor orden siempre es preferible; nunca hay desventajas al usar más puntos.",
+     ok:false,
+     fb:"FALSO. Stencils de mayor orden requieren más puntos de frontera, son más costosos computacionalmente y más sensibles al ruido/redondeo para \\(h\\) pequeño. La elección óptima depende del problema."},
+    {type:"vf",
+     txt:"Para el 3-point stencil de \\(f''\\), si \\(h\\to 2h\\) el error se multiplica por \\(\\approx 4\\) (ya que el error es \\(\\mathcal{O}(h^2)\\)).",
+     ok:true,
+     fb:"VERDADERO. Error \\(\\propto h^2\\): si \\(h\\to 2h\\), error \\(\\to (2h)^2=4h^2\\), es decir, se multiplica por \\(4\\)."}
+  ]
+},
+9:{
+  title:"Código Python: Implementación de Stencils",
+  code:`<span class="kw">def</span> stencil3_d1(f_vals, h):
+    <span class="kw">return</span> (np.roll(f_vals,-<span class="nm">1</span>) - np.roll(f_vals,<span class="nm">1</span>)) / (<span class="nm">2</span>*h)
+
+<span class="kw">def</span> stencil5_d1(f_vals, h):
+    fm2=np.roll(f_vals,<span class="nm">2</span>); fm1=np.roll(f_vals,<span class="nm">1</span>)
+    fp1=np.roll(f_vals,-<span class="nm">1</span>); fp2=np.roll(f_vals,-<span class="nm">2</span>)
+    <span class="kw">return</span> (-fp2 + <span class="nm">8</span>*fp1 - <span class="nm">8</span>*fm1 + fm2) / (<span class="nm">12</span>*h)`,
+  qs:[
+    {type:"mc",
+     txt:"¿Qué hace <code>np.roll(f_vals, -1)</code>?",
+     opts:["Desplaza el arreglo un lugar a la izquierda (equivale a \\(f_{k+1}\\))",
+           "Desplaza el arreglo un lugar a la derecha (equivale a \\(f_{k-1}\\))",
+           "Invierte el arreglo",
+           "Calcula la diferencia con el elemento anterior"],
+     ok:0,
+     fb:"<code>np.roll(arr, -1)</code> rota el arreglo hacia la izquierda: el elemento en posición \\(k\\) queda con el valor que estaba en \\(k+1\\) → accede a \\(f_{k+1}\\) de forma vectorizada."},
+    {type:"mc",
+     txt:"En <code>stencil5_d1</code>, el denominador <code>12*h</code> corresponde a la fórmula \\((-f_{+2}+8f_{+1}-8f_{-1}+f_{-2})/(12h)\\). ¿Cuál es el orden de error?",
+     opts:["\\(\\mathcal{O}(h^2)\\)","\\(\\mathcal{O}(h^3)\\)","\\(\\mathcal{O}(h^4)\\)","\\(\\mathcal{O}(h^6)\\)"],
+     ok:2,
+     fb:"Esta fórmula es el 5-point stencil para \\(f'\\), que tiene error \\(\\mathcal{O}(h^4)\\). Cancela los términos \\(f'''\\) y \\(f^{(5)}\\) del desarrollo de Taylor."},
+    {type:"vf",
+     txt:"El uso de <code>np.roll</code> permite implementar el stencil de forma vectorizada (sin bucle <code>for</code>), mejorando la eficiencia computacional.",
+     ok:true,
+     fb:"VERDADERO. <code>np.roll</code> opera simultáneamente sobre todos los elementos del arreglo. Evitar bucles Python y usar operaciones NumPy vectorizadas es típicamente 10-100× más rápido."},
+    {type:"vf",
+     txt:"<code>np.roll(f_vals, 2)</code> desplaza el arreglo 2 posiciones a la derecha, equivaliendo a acceder a \\(f_{k-2}\\) para todos los índices \\(k\\) simultáneamente.",
+     ok:true,
+     fb:"VERDADERO. <code>np.roll(arr, +n)</code> rota hacia la derecha: posición \\(k\\) recibe \\(f_{k-n}\\). Por eso <code>roll(f,2)</code> accede a \\(f_{k-2}\\) = \\(f_{-2}\\)."}
+  ]
+},
+10:{
+  title:"Código Python: Análisis de Convergencia",
+  code:`pasos = np.logspace(-<span class="nm">0.5</span>, -<span class="nm">4</span>, <span class="nm">30</span>)
+err3, err5 = [], []
+x0 = np.pi/<span class="nm">4</span>
+<span class="kw">for</span> h <span class="kw">in</span> pasos:
+    f_vals = np.array([np.sin(x0+<span class="nm">2</span>*h), np.sin(x0+h),
+                       np.sin(x0), np.sin(x0-h), np.sin(x0-<span class="nm">2</span>*h)])
+    d1_3 = (f_vals[<span class="nm">1</span>] - f_vals[<span class="nm">3</span>]) / (<span class="nm">2</span>*h)
+    d1_5 = (-f_vals[<span class="nm">0</span>]+<span class="nm">8</span>*f_vals[<span class="nm">1</span>]-<span class="nm">8</span>*f_vals[<span class="nm">3</span>]+f_vals[<span class="nm">4</span>]) / (<span class="nm">12</span>*h)
+    err3.append(<span class="kw">abs</span>(d1_3 - np.cos(x0)))
+    err5.append(<span class="kw">abs</span>(d1_5 - np.cos(x0)))`,
+  qs:[
+    {type:"mc",
+     txt:"¿Qué calcula <code>abs(d1_3 - np.cos(x0))</code>?",
+     opts:["La derivada numérica",
+           "El error absoluto entre la aproximación 3-point y la derivada exacta",
+           "La suma de los errores",
+           "El paso \\(h\\)"],
+     ok:1,
+     fb:"<code>d1_3</code> es la aproximación numérica de \\(f'(x_0)\\) y <code>np.cos(x0)</code> es el valor exacto (ya que \\(d/dx\\,\\sin(x)=\\cos(x)\\)). Su diferencia en valor absoluto es el error absoluto."},
+    {type:"mc",
+     txt:"En una gráfica log-log del error vs \\(h\\), el 5-point stencil aparece como una recta con pendiente aproximada:",
+     opts:["1","2","4","6"],
+     ok:2,
+     fb:"Error \\(\\propto h^4\\) → en escala log-log: \\(\\log(\\text{error})=4\\log(h)+\\text{cte}\\). La pendiente es \\(4\\)."},
+    {type:"vf",
+     txt:"La función exacta de la derivada de \\(\\sin(x)\\) en \\(x_0=\\pi/4\\) es \\(\\cos(\\pi/4)=\\sqrt{2}/2\\approx 0.7071\\), el valor de referencia para calcular el error.",
+     ok:true,
+     fb:"VERDADERO. \\((\\sin x)'=\\cos x\\), por tanto \\(f'(\\pi/4)=\\cos(\\pi/4)=1/\\sqrt{2}\\approx 0.7071\\). Este es el valor exacto contra el que se compara la aproximación numérica."},
+    {type:"vf",
+     txt:"Para \\(h\\) muy pequeño (\\(h\\to 10^{-8}\\)), el error numérico puede <em>aumentar</em> debido a errores de redondeo en punto flotante, incluso usando el 5-point stencil.",
+     ok:true,
+     fb:"VERDADERO. Para \\(h\\) muy pequeño se divide entre \\(12h\\approx 10^{-7}\\), amplificando los errores de redondeo (\\(\\sim 10^{-16}\\) en doble precisión). El error mínimo óptimo ocurre en \\(h\\sim 10^{-3}\\) a \\(10^{-4}\\)."}
+  ]
+}
+};
+
+// ══════════════════════════════════════════════════════════
+//  CLAVE DE RESPUESTAS (del .tex)
+// Q1:b,b,V,empuje/peso/fricción | Q2:b,c,F,120 | Q3:b,b,V,...
+// Q4:b,b,V,m0/mf | Q5:c,b,V,reduce/reduce | Q6:c,b,V,gM/βM
+// Q7:c,b,V,aceleración/fricción | Q8:b,c,V,2h | Q9:b,b,V,explícito
+// Q10:b,b,F,dos/uno
+// ══════════════════════════════════════════════════════════
+
+const TIMER_SEC = 300; // 5 min por quiz
+
+// Mezcla un array aleatoriamente (Fisher-Yates)
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let S={
+  student:{},
+  selectedQ:[],
+  flat:[],
+  cur:0, answers:[], score:0,
+  t0:0, timer:null, tLeft:0, done:false,
+  qzBreak:{}
+};
+
+// ══════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function toggleQ(btn,n){
+  // No permitir seleccionar quizzes ya rendidos
+  if(btn.classList.contains('done')){
+    const ci=document.getElementById('i-ci').value.trim();
+    alert(`Ya rendiste Q${n} con CI ${ci||'(sin CI)'}. No puedes volver a rendirlo.`);
+    return;
+  }
+  btn.classList.toggle('on');
+  // Aplicar color si está on
+  if(btn.classList.contains('on')){
+    btn.style.borderColor=QZ_COLORS[n];
+    btn.style.color=QZ_COLORS[n];
+    btn.style.background=QZ_COLORS_L[n];
+  } else {
+    btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+  }
+  // No forzar ninguno si todos están deseleccionados
+}
+function getSelected(){
+  return [...document.querySelectorAll('.qsel-btn.on')]
+    .map(b=>parseInt(b.textContent.replace('Q','')));
+}
+
+// GitHub desde URL
+function ghToken(){ return new URLSearchParams(window.location.search).get('token')||''; }
+function ghRepo(){  return new URLSearchParams(window.location.search).get('repo')||''; }
+
+// ══════════════════════════════════════════════════════════
+//  RECORDS
+// ══════════════════════════════════════════════════════════
+const KEY='miniquiz_series_2026';
+function getRecs(){try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch{return[];}}
+function saveRec(r){const a=getRecs();a.push(r);a.sort((x,y)=>y.nota-x.nota);localStorage.setItem(KEY,JSON.stringify(a));}
+function doClr(){if(confirm('¿Eliminar todo el registro local?')){localStorage.removeItem(KEY);renderLB();}}
+
+// ── Quizzes ya rendidos por CI ──────────────────────────────
+// Devuelve Set de números de quiz ya rendidos por este CI
+function getDoneQuizzes(ci){
+  if(!ci) return new Set();
+  const recs=getRecs();
+  const done=new Set();
+  recs.filter(r=>r.ci===ci).forEach(r=>{
+    String(r.quizzes||'').split(',').forEach(q=>{
+      const n=parseInt(q.trim());
+      if(!isNaN(n)) done.add(n);
+    });
+  });
+  return done;
+}
+
+// Actualiza los botones de quiz marcando los ya rendidos
+function updateDoneBadges(){
+  const ci=document.getElementById('i-ci').value.trim();
+  const done=getDoneQuizzes(ci);
+  const note=document.getElementById('ci-note');
+
+  document.querySelectorAll('.qsel-btn').forEach(btn=>{
+    const n=parseInt(btn.textContent.replace('Q',''));
+    if(done.has(n)){
+      btn.classList.add('done');
+      btn.classList.remove('on');
+      btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+      btn.title=`Ya rendiste Q${n}`;
+    } else {
+      btn.classList.remove('done');
+      btn.title='';
+    }
+  });
+
+  if(ci){
+    note.classList.remove('show');
+    if(done.size>0){
+      const warn=document.getElementById('already-warn');
+      const warnTxt=document.getElementById('already-warn-txt');
+      warnTxt.textContent=`Ya rendiste: Q${[...done].sort((a,b)=>a-b).join(', Q')}. Esos quizzes no están disponibles.`;
+      warn.classList.add('show');
+    } else {
+      document.getElementById('already-warn').classList.remove('show');
+    }
+  } else {
+    note.classList.add('show');
+    document.getElementById('already-warn').classList.remove('show');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+window.addEventListener('load',()=>{
+  if(ghToken()&&ghRepo()){
+    document.getElementById('gh-info').classList.add('show');
+  }
+  // Mostrar nota de CI al cargar
+  document.getElementById('ci-note').classList.add('show');
+  // Aplicar colores a los botones de selección de quiz
+  document.querySelectorAll('.qsel-btn').forEach(btn=>{
+    const n=parseInt(btn.textContent.replace('Q',''));
+    btn.style.setProperty('--qc',QZ_COLORS[n]);
+    btn.addEventListener('click',()=>{
+      if(btn.classList.contains('on')){
+        btn.style.borderColor=QZ_COLORS[n];
+        btn.style.color=QZ_COLORS[n];
+        btn.style.background=QZ_COLORS_L[n];
+      } else {
+        btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+      }
+    });
+  });
+  // No se preselecciona ningún quiz
+});
+
+// ══════════════════════════════════════════════════════════
+//  PASSWORDS
+// ══════════════════════════════════════════════════════════
+// Default passwords: Q1="quiz1", Q2="quiz2", ... Q10="quiz10"
+// Teacher can override via URL: ?p1=abc&p2=def&...&p10=xyz
+function getQzPassword(n){
+  const url=new URLSearchParams(window.location.search);
+  // Contraseñas fáciles pero muy diferentes entre sí
+  // ← CAMBIAR contraseñas para cada nuevo tema
+  const defaults={
+    1:'seno',    2:'coseno',  3:'limite',   4:'centrada',    5:'stencil',
+    6:'siete',   7:'taylor',  8:'error',    9:'roll',        10:'loglog'
+  };
+  return url.get('p'+n) || defaults[n] || ('quiz'+n);
+}
+
+let PW_PENDING_QZ=null; // which quizzes are waiting for password unlock
+let PW_UNLOCKED=new Set(); // already unlocked quiz numbers
+
+function askPasswords(qzNums, callback){
+  // Filter out already unlocked
+  const locked = qzNums.filter(n=>!PW_UNLOCKED.has(n));
+  if(!locked.length){ callback(); return; }
+  // Ask one by one
+  let idx=0;
+  function askNext(){
+    if(idx>=locked.length){ callback(); return; }
+    const qn=locked[idx];
+    const col=QZ_COLORS[qn];
+    const overlay=document.getElementById('pw-overlay');
+    document.getElementById('pw-icon').textContent='🔐';
+    document.getElementById('pw-title').textContent=`Quiz ${qn}: ${QUIZZES[qn].title}`;
+    document.getElementById('pw-title').style.color=col;
+    document.getElementById('pw-sub').textContent='Ingresa la contraseña para acceder a este quiz';
+    document.getElementById('pw-btn').style.background=col;
+    document.getElementById('pw-btn').style.color='#fff';
+    document.getElementById('pw-inp').value='';
+    document.getElementById('pw-err').style.display='none';
+    document.getElementById('pw-inp').classList.remove('error');
+    overlay.classList.remove('hidden');
+    PW_PENDING_QZ={qn, onOk:()=>{ PW_UNLOCKED.add(qn); idx++; askNext(); }};
+    setTimeout(()=>document.getElementById('pw-inp').focus(),100);
+  }
+  askNext();
+}
+
+function checkPassword(){
+  if(!PW_PENDING_QZ) return;
+  const {qn, onOk}=PW_PENDING_QZ;
+  const val=document.getElementById('pw-inp').value.trim();
+  if(val===getQzPassword(qn)){
+    document.getElementById('pw-overlay').classList.add('hidden');
+    PW_PENDING_QZ=null;
+    onOk();
+  } else {
+    const inp=document.getElementById('pw-inp');
+    inp.classList.add('error');
+    document.getElementById('pw-err').style.display='block';
+    setTimeout(()=>{inp.classList.remove('error');inp.value='';inp.focus();},600);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  BEGIN
+// ══════════════════════════════════════════════════════════
+// ── Verificación lista blanca desde allowed.json (GitHub Pages) ──
+// El docente publica allowed.json desde el portal (botón "Publicar lista").
+// El archivo es público en el mismo repo → no requiere token.
+// Si no existe o la lista está vacía → abierto a todos.
+async function verifyAllowed(nm, ci, onOk){
+  const er = document.getElementById('reg-err');
+  er.textContent = '⏳ Verificando acceso…';
+  er.style.color = '#457B9D';
+  er.style.display = 'block';
+
+  try{
+    // Intentar leer allowed.json desde la raíz del mismo sitio
+    const base = location.origin + location.pathname.replace(/\/[^/]*$/, '/');
+    const r = await fetch(base + 'allowed.json?t=' + Date.now(),
+      {cache:'no-store'});
+    if(!r.ok){ er.style.display='none'; onOk(); return; }
+    const data = await r.json();
+    const list = data.students || [];
+    if(!list.length){ er.style.display='none'; onOk(); return; }
+
+    const entry = list.find(s => String(s.ci).trim() === String(ci).trim());
+    if(!entry){
+      er.textContent = '\u26A0 CI no registrado. Contacta al docente.';
+      er.style.color = ''; return;
+    }
+    const norm = s => s.toLowerCase().trim().replace(/\s+/g,' ')
+                        .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(norm(nm) !== norm(entry.name)){
+      er.textContent = '\u26A0 Nombre no coincide con el registrado para CI ' + ci + '.';
+      er.style.color = ''; return;
+    }
+    er.style.display='none';
+    onOk();
+  }catch(e){
+    // Red caída u otro error → dejar pasar
+    er.style.display='none';
+    onOk();
+  }
+}
+
+
+function begin(){
+  const nm=document.getElementById('i-name').value.trim();
+  const ci=document.getElementById('i-ci').value.trim();
+  const sel=getSelected();
+  const er=document.getElementById('reg-err');
+  if(!nm||!ci||!sel.length){er.textContent='⚠ Completa todos los campos y selecciona al menos un quiz.';er.style.display='block';er.style.color='';return;}
+  er.style.display='none';
+
+  verifyAllowed(nm, ci, ()=>{
+  // ── Resto del begin (dentro del callback) ──────────────
+
+  // Filtrar quizzes ya rendidos por este CI
+  const done=getDoneQuizzes(ci);
+  const selFiltrado=sel.filter(n=>!done.has(n));
+
+  if(selFiltrado.length===0){
+    const er=document.getElementById('reg-err');
+    er.textContent='⚠ Ya rendiste todos los quizzes seleccionados. Elige otros.';
+    er.style.display='block';
+    return;
+  }
+
+  if(selFiltrado.length < sel.length){
+    const yaRendidos=sel.filter(n=>done.has(n));
+    const continuar=confirm(
+      `Ya rendiste Q${yaRendidos.join(', Q')}.\n\n`+
+      `Solo se abrirán los quizzes pendientes: Q${selFiltrado.join(', Q')}.\n\n`+
+      `¿Continuar?`
+    );
+    if(!continuar) return;
+  }
+
+  // Ask passwords for each selected quiz
+  askPasswords(selFiltrado, ()=>{
+    S.student={nm,ci};
+    S.selectedQ=selFiltrado;
+    S.flat=[];
+    selFiltrado.forEach(qn=>{
+      const qs=shuffle(QUIZZES[qn].qs); // orden aleatorio
+      qs.forEach((q,i)=>S.flat.push({qzNum:qn,qIdx:i,q}));
+    });
+    S.cur=0; S.answers=[]; S.score=0; S.done=false;
+    S.t0=Date.now();
+    S.tLeft=selFiltrado.length*TIMER_SEC;
+    S.qzBreak={};
+    selFiltrado.forEach(n=>S.qzBreak[n]={ok:0,tot:0});
+
+    show('s-quiz');
+    renderQ();
+    startTimer();
+  });
+  }); // fin verifyAllowed
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER QUESTION
+// ══════════════════════════════════════════════════════════
+function renderQ(){
+  const {qzNum,qIdx,q}=S.flat[S.cur];
+  const n=S.cur+1; const tot=S.flat.length;
+  const col=QZ_COLORS[qzNum]; const colL=QZ_COLORS_L[qzNum];
+
+  // topbar
+  document.getElementById('qz-label').textContent=`Q${qzNum} · P${qIdx+1}`;
+  document.getElementById('qz-label').style.color=col;
+  document.getElementById('prog-fill').style.width=((n-1)/tot*100)+'%';
+  document.getElementById('prog-fill').style.background=col;
+
+  // header card
+  const typeMap={mc:'Opción Múltiple',vf:'Verdadero / Falso',fill:'Completar'};
+  const tag=document.getElementById('qtag');
+  tag.textContent=`Quiz ${qzNum}: ${QUIZZES[qzNum].title} · ${typeMap[q.type]}`;
+  tag.style.color=col;
+  document.getElementById('qcard').style.borderLeftColor=col;
+  document.getElementById('qcard').style.borderLeftWidth='4px';
+  document.getElementById('qcard').style.borderLeftStyle='solid';
+  document.getElementById('qnum').textContent=`Pregunta ${qIdx+1} de 4`;
+
+  // texto
+  document.getElementById('qtxt').innerHTML=q.txt;
+
+  // código si existe
+  const codeDiv=document.getElementById('qcode');
+  if(QUIZZES[qzNum].code && qIdx===0){
+    codeDiv.style.display='block';
+    codeDiv.innerHTML=`<div class="code-blk">${QUIZZES[qzNum].code}</div>`;
+  } else {
+    codeDiv.style.display='none';
+  }
+
+  // body
+  const body=document.getElementById('qbody');
+  body.innerHTML='';
+
+  if(q.type==='mc'){
+    const letters=['a','b','c','d'];
+    const wrap=document.createElement('div'); wrap.className='opts';
+    // Mezclar opciones manteniendo registro del índice original correcto
+    const idxs=shuffle([0,1,2,3].slice(0,q.opts.length));
+    // Actualizar el índice correcto según el nuevo orden
+    const newOk=idxs.indexOf(q.ok);
+    q._shuffledOpts=idxs.map(i=>q.opts[i]);
+    q._shuffledOk=newOk;
+    q._shuffledIdxs=idxs;
+    idxs.forEach((origIdx,displayIdx)=>{
+      const b=document.createElement('button');
+      b.className='opt-btn'; b.dataset.i=displayIdx; b.dataset.orig=origIdx;
+      b.innerHTML=`<span class="opt-key">${letters[displayIdx]})</span><span>${q.opts[origIdx]}</span>`;
+      b.onclick=()=>pickMC(b,displayIdx,col);
+      wrap.appendChild(b);
+    });
+    body.appendChild(wrap);
+
+  } else if(q.type==='vf'){
+    const wrap=document.createElement('div'); wrap.className='vf-row';
+    ['Verdadero','Falso'].forEach((lbl,i)=>{
+      const b=document.createElement('button');
+      b.className='vf-btn'; b.dataset.v=(i===0);
+      b.textContent=lbl;
+      b.onclick=()=>pickVF(b,i===0);
+      wrap.appendChild(b);
+    });
+    body.appendChild(wrap);
+
+  } else if(q.type==='fill'){
+    const inp=document.createElement('input');
+    inp.className='fill-inp'; inp.type='text';
+    inp.placeholder='Escribe tu respuesta...'; inp.id='fill-inp';
+    inp.onkeydown=e=>{if(e.key==='Enter'&&!S.done)submitFill();};
+    const sb=document.createElement('button');
+    sb.className='fill-submit'; sb.textContent='Confirmar';
+    sb.onclick=()=>submitFill();
+    body.appendChild(inp); body.appendChild(sb);
+  }
+
+  // reset feedback
+  const fb=document.getElementById('fb-box');
+  fb.className='fb-box';
+  document.getElementById('btn-next').disabled=true;
+  document.getElementById('live').textContent=S.score;
+  S.done=false;
+  // Render LaTeX in the question
+  if(window.MathJax){
+    const nodes=[
+      document.getElementById('qtxt'),
+      document.getElementById('qbody'),
+      document.getElementById('qcode')
+    ].filter(Boolean);
+    MathJax.typesetClear(nodes);
+    MathJax.typesetPromise(nodes);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  ANSWER HANDLERS
+// ══════════════════════════════════════════════════════════
+function pickMC(btn,idx,col){
+  if(S.done) return; S.done=true;
+  const {q}=S.flat[S.cur];
+  // Usar índice mezclado si existe, si no el original
+  const correctDisplayIdx = q._shuffledOk !== undefined ? q._shuffledOk : q.ok;
+  const isOk=idx===correctDisplayIdx;
+  if(isOk) S.score++;
+  document.querySelectorAll('.opt-btn').forEach(b=>{
+    b.disabled=true;
+    const i=parseInt(b.dataset.i);
+    const correctI = q._shuffledOk !== undefined ? q._shuffledOk : q.ok;
+    if(i===correctI) b.classList.add('ok');
+    else if(i===idx&&!isOk) b.classList.add('ko');
+  });
+  showFB(isOk,q.fb);
+  S.answers.push({type:'mc',given:idx,ok:q.ok,res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function pickVF(btn,val){
+  if(S.done) return; S.done=true;
+  const {q}=S.flat[S.cur];
+  const isOk=val===q.ok;
+  if(isOk) S.score++;
+  document.querySelectorAll('.vf-btn').forEach(b=>{
+    b.disabled=true;
+    const bv=b.dataset.v==='true';
+    if(bv===q.ok) b.classList.add('ok');
+    else if(bv===val&&!isOk) b.classList.add('ko');
+  });
+  showFB(isOk,q.fb);
+  S.answers.push({type:'vf',given:val,ok:q.ok,res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function submitFill(){
+  if(S.done) return;
+  const inp=document.getElementById('fill-inp');
+  const val=(inp?.value||'').trim().toLowerCase().replace(/\s+/g,' ');
+  S.done=true;
+  if(inp){inp.disabled=true;}
+  document.querySelectorAll('.fill-submit').forEach(b=>b.disabled=true);
+  const {q}=S.flat[S.cur];
+  const isOk=q.ok.some(a=>val.includes(a.toLowerCase()));
+  if(isOk) S.score++;
+  showFB(isOk,q.fb);
+  S.answers.push({type:'fill',given:val,ok:q.ok[0],res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function showFB(ok,txt){
+  const fb=document.getElementById('fb-box');
+  document.getElementById('fb-ico').textContent=ok?'✓':'✗';
+  document.getElementById('fb-txt').innerHTML=txt;
+  fb.className='fb-box show '+(ok?'ok':'ko');
+  // Re-render LaTeX in the feedback
+  if(window.MathJax){
+    MathJax.typesetClear([document.getElementById('fb-txt')]);
+    MathJax.typesetPromise([document.getElementById('fb-txt')]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  NEXT / FINISH
+// ══════════════════════════════════════════════════════════
+function nextQ(){
+  if(!S.done){
+    const {q,qzNum}=S.flat[S.cur];
+    S.answers.push({type:q.type,given:null,ok:q.type==='mc'?q.ok:q.ok,res:false,q,qzNum});
+    S.qzBreak[qzNum].tot++;
+  }
+  S.cur++;
+  if(S.cur>=S.flat.length){finish();return;}
+  renderQ();
+}
+
+function finish(){
+  clearInterval(S.timer);
+  const elapsed=Math.round((Date.now()-S.t0)/1000);
+  const tot=S.flat.length;
+  const ok=S.answers.filter(a=>a.res).length;
+  const nota=parseFloat((ok/tot*100).toFixed(1));
+  const pass=nota>=51;
+
+  const rec={
+    nm:S.student.nm, ci:S.student.ci,
+    nota, ok, tot, elapsed,
+    quizzes:S.selectedQ.join(','),
+    breakdown:S.qzBreak,
+    date:new Date().toLocaleString('es-BO'),
+    tema:'series'
+  };
+  saveRec(rec);
+
+  // resultados
+  document.getElementById('res-name').textContent=S.student.nm;
+  document.getElementById('res-ci').textContent=`CI: ${S.student.ci}`;
+  const gp=document.getElementById('gpct');
+  gp.textContent=nota+'%'; gp.className='gpct '+(pass?'pass':'fail');
+  document.getElementById('grade-ring').className='grade-ring '+(pass?'pass':'fail');
+  const vr=document.getElementById('res-verd');
+  vr.textContent=pass?'✓ APROBADO':'✗ REPROBADO';
+  vr.className='verd '+(pass?'pass':'fail');
+  document.getElementById('rs-ok').textContent=ok;
+  document.getElementById('rs-ko').textContent=tot-ok;
+  document.getElementById('rs-tot').textContent=tot;
+  document.getElementById('rs-t').textContent=elapsed+'s';
+
+  // puntaje por quiz
+  const qzEl=document.getElementById('qz-scores');
+  qzEl.innerHTML=S.selectedQ.map(n=>{
+    const b=S.qzBreak[n]||{ok:0,tot:0};
+    const pct=b.tot>0?(b.ok/b.tot*100).toFixed(0):0;
+    const col=QZ_COLORS[n]; const colL=QZ_COLORS_L[n];
+    return `<div class="qzs" style="background:${colL};border-color:${col}">
+      <div class="qzs-label" style="color:${col}">Q${n}</div>
+      <div class="qzs-val" style="color:${col}">${b.ok}/${b.tot}</div>
+      <div style="font-size:.58rem;color:${col}">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  // revisión
+  const revEl=document.getElementById('rev-list');
+  revEl.innerHTML=S.answers.map((a,i)=>{
+    const col=QZ_COLORS[a.qzNum];
+    // Para opciones múltiple mostrar la opción con LaTeX
+    // Para mc, usar los índices originales para mostrar texto correcto
+    const origGiven = (a.type==='mc' && a.q._shuffledIdxs)
+      ? a.q._shuffledIdxs[a.given]
+      : a.given;
+    const yt=a.given===null?'<em>Sin respuesta</em>':
+             a.type==='mc'?a.q.opts[origGiven]:
+             a.type==='vf'?(a.given?'Verdadero':'Falso'):
+             `<em>${a.given}</em>`;
+    const corr=a.type==='mc'?a.q.opts[a.q.ok]:
+               a.type==='vf'?(a.ok?'Verdadero':'Falso'):
+               `<em>${a.q.ok[0]}</em>`;
+    return `<div class="rev-item ${a.res?'ok':'ko'}" style="border-left-color:${col}">
+      <div class="rev-q">
+        <strong style="color:${col}">Q${a.qzNum} · P${S.flat[i].qIdx+1}</strong>
+        &nbsp;${a.q.txt}
+      </div>
+      <div class="rev-ans" style="margin-top:.4rem">
+        <span class="rev-yours">Tu respuesta: ${yt}</span>
+        ${!a.res?`<span class="rev-corr">✓ Correcta: ${corr}</span>`:''}
+      </div>
+      <div class="rev-expl">${a.q.fb}</div>
+    </div>`;
+  }).join('');
+
+  renderLB(rec.ci);
+  show('s-res');
+  saveToGitHub(rec);
+  // Actualizar badges de quizzes completados
+  updateDoneBadges();
+  // Render LaTeX en toda la pantalla de resultados
+  if(window.MathJax){
+    MathJax.typesetClear([document.getElementById('rev-list')]);
+    MathJax.typesetPromise([document.getElementById('rev-list')]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  TIMER
+// ══════════════════════════════════════════════════════════
+function startTimer(){
+  updTimer();
+  S.timer=setInterval(()=>{
+    S.tLeft--; updTimer();
+    if(S.tLeft<=0){
+      clearInterval(S.timer);
+      if(!S.done) finish();
+    }
+  },1000);
+}
+function updTimer(){
+  const el=document.getElementById('timer-badge');
+  const m=Math.floor(S.tLeft/60); const s=S.tLeft%60;
+  el.textContent=`${m}:${s.toString().padStart(2,'0')}`;
+  el.className='timer-badge'+(S.tLeft<=30?' u':S.tLeft<=60?' w':'');
+}
+
+// ══════════════════════════════════════════════════════════
+//  LEADERBOARD
+// ══════════════════════════════════════════════════════════
+function renderLB(myCI){
+  const recs=getRecs(); const el=document.getElementById('lb-list');
+  if(!recs.length){
+    el.innerHTML='<div style="text-align:center;padding:1.2rem;color:var(--muted);font-size:.78rem">Sin registros aún.</div>';
+    return;
+  }
+  const medals=['🥇','🥈','🥉'];
+  el.innerHTML=recs.slice(0,20).map((r,i)=>{
+    const pass=r.nota>=51; const me=r.ci===myCI;
+    return `<div class="lb-row ${me?'me':''}">
+      <div class="lb-rank">${medals[i]||(i+1)}</div>
+      <div style="flex:1">
+        <div class="lb-name">${r.nm}</div>
+        <div class="lb-meta">CI: ${r.ci} · Q:${r.quizzes} · ${r.date}</div>
+      </div>
+      <div>
+        <div class="lb-nota ${pass?'pass':'fail'}">${r.nota}%</div>
+        <div class="lb-meta" style="text-align:right">${r.ok}/${r.tot} · ${r.elapsed}s</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  GITHUB SAVE
+// ══════════════════════════════════════════════════════════
+async function saveToGitHub(rec){
+  const dot=document.getElementById('gh-dot');
+  const msg=document.getElementById('gh-msg');
+  const token=ghToken(); const repo=ghRepo();
+  if(!token||!repo){
+    dot.style.background='#adb5bd';
+    msg.textContent='Sin token GitHub — nota guardada solo localmente.';
+    return;
+  }
+  dot.style.background='#ffd166';
+  msg.textContent='Guardando en GitHub...';
+  const body=[
+    `## Resultado del Mini Quiz`,``,
+    `| Campo | Valor |`,`|---|---|`,
+    `| **Nombre** | ${rec.nm} |`,
+    `| **CI** | ${rec.ci} |`,
+
+    `| **Nota** | ${rec.nota}% (${rec.ok}/${rec.tot}) |`,
+    `| **Estado** | ${rec.nota>=51?'✅ APROBADO':'❌ REPROBADO'} |`,
+    `| **Quizzes** | Q${rec.quizzes} |`,
+    `| **Tiempo** | ${rec.elapsed}s |`,
+    `| **Fecha** | ${rec.date} |`,
+    ``,`### Desglose`,
+    ...Object.entries(rec.breakdown).map(([n,b])=>`- Q${n}: ${b.ok}/${b.tot} (${b.tot>0?(b.ok/b.tot*100).toFixed(0):0}%)`),
+    ``,`\`\`\`json`,JSON.stringify(rec,null,2),`\`\`\``
+  ].join('\n');
+  try{
+    const r=await fetch(`https://api.github.com/repos/${repo}/issues`,{
+      method:'POST',
+      headers:{'Authorization':`token ${token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+      body:JSON.stringify({title:`[Quiz][series] ${rec.nm} · CI:${rec.ci} · ${rec.nota}% · ${rec.date}`,body,labels:['quiz-nota']})
+    });
+    if(r.ok){
+      const d=await r.json();
+      dot.style.background='#2D6A4F';
+      msg.innerHTML=`✓ Guardado · Issue #${d.number} · <a href="${d.html_url}" target="_blank" style="color:#2D6A4F">Ver en GitHub →</a>`;
+    } else { throw new Error('HTTP '+r.status); }
+  }catch(e){
+    dot.style.background='#E63946';
+    msg.textContent='Error al guardar en GitHub: '+e.message;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  CSV + RETRY
+// ══════════════════════════════════════════════════════════
+function doCSV(){
+  const recs=getRecs(); if(!recs.length){alert('No hay registros.');return;}
+  const h='Nombre,CI,Nota(%),Correctas,Total,Tiempo(s),Quizzes,Fecha';
+  const rows=recs.map(r=>`"${r.nm}","${r.ci}",${r.nota},${r.ok},${r.tot},${r.elapsed},"${r.quizzes}","${r.date}"`);
+  const blob=new Blob([[h,...rows].join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`notas_miniquiz_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+function retry(){
+  document.getElementById('i-name').value=S.student.nm||'';
+  document.getElementById('i-ci').value=S.student.ci||'';
+  
+  document.querySelectorAll('.qsel-btn').forEach(b=>{
+    b.classList.remove('on'); b.style.borderColor=''; b.style.color=''; b.style.background='';
+  });
+  // No preseleccionar ningún quiz al reintentar
+  show('s-reg');
+}
+</script>
+</body>
+</html>
