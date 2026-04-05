@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<!-- ╔══════════════════════════════════════════════════════════╗
+     TEMPLATE HTML — Mini Quiz Interactivo
+     Yerko Aldair Quispe Ticona · Análisis Numérico 2026
+
+     CAMBIOS YA APLICADOS (no modificar la estructura):
+     ✓ Sin paralelo — solo Nombre y CI
+     ✓ Contraseña individual por quiz (modal al iniciar)
+     ✓ Una sola vez por quiz por CI (localStorage)
+     ✓ Preguntas y opciones en orden aleatorio
+     ✓ Fórmulas LaTeX con MathJax 3 (\( ... \))
+     ✓ Código Python con fondo claro en preguntas
+     ✓ Revisión de respuestas con LaTeX renderizado
+     ✓ GitHub Issues (token via URL: ?token=xxx&repo=usuario/repo)
+     ✓ Exportar CSV · Ranking local
+
+     PARA USAR EN NUEVO TEMA:
+     1. Buscar "TEMA" y reemplazar con el nombre del tema
+     2. Cambiar el emoji de la línea <span class="emoji">
+     3. Cambiar KEY='miniquiz_TEMA_2026' (línea ~980)
+     4. Cambiar las contraseñas (defaults en getQzPassword)
+     5. Reemplazar el bloque const QUIZZES = { ... }
+        con las 10 preguntas del nuevo tema
+     6. Para fórmulas LaTeX usar: \( ecuación \)
+     7. Para código en preguntas usar el campo `code:` del quiz
+     ╚══════════════════════════════════════════════════════════╝ -->
+
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Quiz · Diferencias Finitas · Análisis Numérico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\\(','\\)'],['$','$']],
+    displayMath: [['\\[','\\]'],['$$','$$']],
+    processEscapes: true,
+    processEnvironments: true
+  },
+  svg: { fontCache: 'global' },
+  options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+/* ═══════════════════════════════════════════════
+   VARIABLES Y RESET
+═══════════════════════════════════════════════ */
+:root{
+  --bg:       #f8f9fa;
+  --bg2:      #ffffff;
+  --bg3:      #f1f3f5;
+  --border:   #dee2e6;
+  --text:     #212529;
+  --muted:    #6c757d;
+  --shadow:   0 2px 12px rgba(0,0,0,.08);
+
+  /* colores de los 10 quizzes (fieles al .tex) */
+  --c1:#E63946; --c1l:#FFF0F0;
+  --c2:#D4762A; --c2l:#FFF6EE;
+  --c3:#2A9D8F; --c3l:#EDFAF8;
+  --c4:#6A0572; --c4l:#F8EEFB;
+  --c5:#1D3557; --c5l:#EEF3FA;
+  --c6:#C45E3A; --c6l:#FDF2EE;
+  --c7:#457B9D; --c7l:#EDF4FA;
+  --c8:#2D6A4F; --c8l:#EEF8F3;
+  --c9:#9B2226; --c9l:#FDECEA;
+  --c10:#3A0CA3;--c10l:#EDE7FB;
+  --codebg:#1E1E2E;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+}
+
+/* ══ QUIZ YA RENDIDO ══ */
+.qsel-btn.done{
+  border-color:#2D6A4F !important;
+  color:#2D6A4F !important;
+  background:#eef8f3 !important;
+  cursor:not-allowed;
+  position:relative;
+}
+.qsel-btn.done::after{
+  content:'✓';
+  position:absolute;
+  top:-6px;right:-6px;
+  width:16px;height:16px;
+  background:#2D6A4F;
+  color:#fff;
+  border-radius:50%;
+  font-size:.6rem;
+  display:flex;align-items:center;justify-content:center;
+  line-height:16px;text-align:center;
+}
+.already-done-warn{
+  display:none;
+  padding:.6rem .9rem;
+  background:#fff3cd;border:1px solid #e67700;border-radius:6px;
+  font-size:.75rem;color:#7c4a00;margin-bottom:.8rem;
+  align-items:center;gap:.5rem;
+}
+.already-done-warn.show{display:flex;}
+.ci-check-note{
+  font-size:.68rem;color:var(--muted);margin-top:.35rem;
+  display:none;
+}
+.ci-check-note.show{display:block;}
+/* ══ PASSWORD MODAL ══ */
+.pw-overlay{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;
+  animation:fadeup .2s ease;
+}
+.pw-overlay.hidden{display:none;}
+.pw-modal{
+  background:#fff;border-radius:12px;padding:2rem 1.8rem;
+  width:min(90vw,380px);box-shadow:0 8px 40px rgba(0,0,0,.25);
+  text-align:center;
+}
+.pw-icon{font-size:2.2rem;margin-bottom:.6rem;display:block;}
+.pw-title{font-size:1.1rem;font-weight:800;margin-bottom:.2rem;color:var(--text);}
+.pw-sub{font-size:.78rem;color:var(--muted);margin-bottom:1.2rem;}
+.pw-inp{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;padding:.7rem 1rem;text-align:center;
+  font-family:'Inter',sans-serif;font-size:1.1rem;font-weight:600;letter-spacing:.15em;
+  outline:none;transition:all .2s;margin-bottom:.8rem;
+}
+.pw-inp:focus{border-color:var(--c5);box-shadow:0 0 0 3px rgba(29,53,87,.12);}
+.pw-inp.error{border-color:var(--c1);animation:shake .3s ease;}
+@keyframes shake{0%,100%{transform:none}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.pw-btn{
+  width:100%;padding:.8rem;border:none;border-radius:8px;
+  font-family:'Inter',sans-serif;font-size:.9rem;font-weight:700;
+  cursor:pointer;transition:all .2s;
+}
+.pw-err{font-size:.75rem;color:var(--c1);margin-top:.4rem;display:none;height:1rem;}
+
+/* ══ END PASSWORD MODAL ══ */
+/* ── CABECERA ── */
+.site-header{
+  background:var(--c5);
+  color:#fff;
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:.5rem;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+.hdr-left{font-size:.75rem;opacity:.85;font-family:'JetBrains Mono',monospace;}
+.hdr-left strong{color:#ffd166;font-size:.85rem;}
+.hdr-right{font-size:.7rem;opacity:.7;text-align:right;}
+
+/* ── WRAP ── */
+.wrap{max-width:780px;margin:0 auto;padding:1.5rem 1rem 4rem;}
+
+/* ── SCREENS ── */
+.screen{display:none;}
+.screen.on{display:block;animation:fadeup .35s ease;}
+@keyframes fadeup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* ══════════════════════════════════════
+   PANTALLA REGISTRO
+══════════════════════════════════════ */
+.reg-hero{
+  background:var(--c5);
+  color:#fff;
+  border-radius:12px;
+  padding:2rem 1.5rem 1.5rem;
+  text-align:center;
+  margin-bottom:1.5rem;
+}
+.reg-hero .emoji{font-size:2.8rem;display:block;margin-bottom:.75rem;}
+.reg-hero h1{
+  font-size:clamp(1.4rem,4vw,2rem);
+  font-weight:800;letter-spacing:-.02em;margin-bottom:.3rem;
+}
+.reg-hero h1 span{color:#ffd166;}
+.reg-hero p{font-size:.82rem;opacity:.8;line-height:1.7;}
+.reg-sub{
+  font-size:.7rem;margin-top:.6rem;opacity:.65;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.05em;
+}
+
+.reg-card{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:1.6rem;
+  box-shadow:var(--shadow);
+}
+.reg-card h2{
+  font-size:.9rem;font-weight:700;color:var(--c5);
+  margin-bottom:1.2rem;letter-spacing:.04em;text-transform:uppercase;
+}
+
+.fld{margin-bottom:1rem;}
+.fld label{
+  display:block;font-size:.7rem;font-weight:600;
+  color:var(--muted);letter-spacing:.08em;text-transform:uppercase;
+  margin-bottom:.35rem;
+}
+.fld input,.fld select{
+  width:100%;
+  background:var(--bg3);
+  border:1.5px solid var(--border);
+  border-radius:7px;
+  padding:.65rem .9rem;
+  font-family:'Inter',sans-serif;font-size:.9rem;color:var(--text);
+  outline:none;transition:all .2s;
+}
+.fld input:focus,.fld select:focus{
+  border-color:var(--c5);
+  box-shadow:0 0 0 3px rgba(29,53,87,.12);
+}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+
+/* selector de quizzes */
+.quiz-sel-title{
+  font-size:.7rem;font-weight:600;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem;
+}
+.qsel-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:.4rem;margin-bottom:1.1rem;}
+.qsel-btn{
+  padding:.5rem .2rem;border-radius:6px;
+  border:1.5px solid var(--border);background:transparent;
+  font-family:'JetBrains Mono',monospace;font-size:.72rem;
+  color:var(--muted);cursor:pointer;text-align:center;transition:all .18s;
+}
+.qsel-btn.on{border-color:var(--c5);color:var(--c5);background:var(--c5l);}
+
+.gh-info{
+  display:none;margin-bottom:1rem;padding:.5rem .8rem;
+  background:#eef8f3;border:1px solid #2D6A4F;border-radius:6px;
+  font-size:.68rem;color:#2D6A4F;align-items:center;gap:.5rem;
+}
+.gh-info.show{display:flex;}
+
+.err-msg{color:var(--c1);font-size:.75rem;margin-bottom:.8rem;display:none;}
+
+.btn-start{
+  width:100%;padding:.85rem;border:none;border-radius:8px;
+  background:var(--c5);color:#fff;
+  font-family:'Inter',sans-serif;font-size:.9rem;font-weight:700;
+  cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:.5rem;
+}
+.btn-start:hover{background:#162840;box-shadow:0 4px 16px rgba(29,53,87,.3);}
+
+/* ══════════════════════════════════════
+   BARRA SUPERIOR DEL QUIZ
+══════════════════════════════════════ */
+.quiz-topbar{
+  display:flex;align-items:center;gap:.75rem;
+  margin-bottom:1.2rem;flex-wrap:wrap;
+}
+.qz-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.72rem;font-weight:600;white-space:nowrap;
+}
+.prog-track{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;min-width:60px;}
+.prog-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.timer-badge{
+  font-family:'JetBrains Mono',monospace;font-size:.75rem;font-weight:600;
+  padding:.28rem .65rem;border-radius:20px;border:1.5px solid var(--border);
+  min-width:46px;text-align:center;transition:all .3s;
+}
+.timer-badge.w{border-color:#e67700;color:#e67700;background:#fff8f0;}
+.timer-badge.u{border-color:var(--c1);color:var(--c1);background:#fff0f0;animation:blink .5s step-end infinite alternate;}
+@keyframes blink{to{opacity:.4}}
+
+/* ══════════════════════════════════════
+   TARJETA DE PREGUNTA
+══════════════════════════════════════ */
+.qcard{
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  margin-bottom:1rem;
+  box-shadow:var(--shadow);
+}
+.qcard-header{
+  padding:.6rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.qcard-tag{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.62rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+}
+.qcard-num{font-size:.68rem;color:var(--muted);}
+.qcard-body{padding:1.2rem 1rem;}
+.qtxt{font-size:.92rem;font-weight:600;line-height:1.75;margin-bottom:1.1rem;color:var(--text);}
+.qtxt code{
+  background:#F6F8FA;color:#CF222E;border:1px solid #DEE2E6;
+  padding:.12em .4em;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:.83em;
+}
+
+/* bloque de código — TEMA CLARO */
+.code-blk{
+  background:#F6F8FA;border:1.5px solid #DEE2E6;border-radius:7px;
+  padding:.9rem 1rem;margin-bottom:1rem;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  line-height:1.75;color:#24292E;overflow-x:auto;white-space:pre;
+}
+.kw{color:#0550AE;font-weight:600;}
+.st{color:#0A3069;}
+.cm{color:#6E7781;font-style:italic;}
+.nm{color:#953800;font-weight:500;}
+.fn{color:#8250DF;font-weight:600;}
+.op{color:#CF222E;}
+
+/* ── opciones múltiple ── */
+.opts{display:flex;flex-direction:column;gap:.5rem;}
+.opt-btn{
+  display:flex;align-items:flex-start;gap:.75rem;
+  padding:.75rem .9rem;
+  background:var(--bg3);border:1.5px solid var(--border);border-radius:7px;
+  cursor:pointer;text-align:left;font-family:'Inter',sans-serif;
+  font-size:.84rem;line-height:1.55;color:var(--text);
+  transition:all .16s;width:100%;
+}
+.opt-btn:hover:not(:disabled){border-color:rgba(29,53,87,.4);background:#eef3fa;transform:translateX(3px);}
+.opt-key{
+  font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:600;
+  color:var(--muted);min-width:20px;background:var(--border);
+  border-radius:3px;padding:.1em .35em;text-align:center;flex-shrink:0;margin-top:1px;
+}
+.opt-btn.sel{border-color:var(--c5);background:var(--c5l);}
+.opt-btn.sel .opt-key{background:var(--c5);color:#fff;}
+.opt-btn.ok{border-color:#2D6A4F;background:#eef8f3;pointer-events:none;}
+.opt-btn.ok .opt-key{background:#2D6A4F;color:#fff;}
+.opt-btn.ko{border-color:var(--c1);background:#fff0f0;pointer-events:none;}
+.opt-btn.ko .opt-key{background:var(--c1);color:#fff;}
+.opt-btn:disabled{cursor:default;}
+
+/* ── V/F ── */
+.vf-row{display:flex;gap:.6rem;}
+.vf-btn{
+  flex:1;padding:.65rem;border-radius:7px;border:1.5px solid var(--border);
+  background:var(--bg3);font-family:'Inter',sans-serif;
+  font-size:.88rem;font-weight:700;color:var(--muted);
+  cursor:pointer;text-align:center;transition:all .18s;
+}
+.vf-btn:hover:not(:disabled){border-color:#e67700;color:#e67700;background:#fff8f0;}
+.vf-btn.sel{border-color:#e67700;color:#e67700;background:#fff8f0;}
+.vf-btn.ok{border-color:#2D6A4F;color:#2D6A4F;background:#eef8f3;pointer-events:none;}
+.vf-btn.ko{border-color:var(--c1);color:var(--c1);background:#fff0f0;pointer-events:none;}
+.vf-btn:disabled{cursor:default;}
+
+/* ── completar ── */
+.fill-inp{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:7px;padding:.65rem .9rem;
+  font-family:'Inter',sans-serif;font-size:.88rem;color:var(--text);
+  outline:none;transition:all .2s;margin-top:.4rem;
+}
+.fill-inp:focus{border-color:#e67700;box-shadow:0 0 0 3px rgba(230,119,0,.1);}
+.fill-inp:disabled{opacity:.6;cursor:default;}
+.fill-submit{
+  margin-top:.5rem;padding:.55rem 1.2rem;
+  border:1.5px solid var(--c5);border-radius:7px;
+  background:transparent;color:var(--c5);
+  font-family:'Inter',sans-serif;font-size:.78rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.fill-submit:hover{background:var(--c5l);}
+
+/* ── feedback ── */
+.fb-box{
+  display:none;margin-top:.75rem;padding:.8rem 1rem;
+  border-radius:7px;border:1px solid;font-size:.8rem;line-height:1.65;
+  gap:.6rem;
+}
+.fb-box.show{display:flex;animation:fadeup .25s ease;}
+.fb-box.ok{border-color:#2D6A4F;background:#eef8f3;color:#2D6A4F;}
+.fb-box.ko{border-color:var(--c1);background:#fff0f0;color:var(--c1);}
+.fb-ico{font-size:.95rem;flex-shrink:0;margin-top:1px;}
+
+/* nav */
+.qnav{display:flex;align-items:center;justify-content:flex-end;gap:.7rem;margin-top:.5rem;}
+.live-score{font-size:.72rem;color:var(--muted);margin-right:auto;}
+.live-score strong{color:#2D6A4F;}
+
+.btn-next{
+  padding:.65rem 1.3rem;border:1.5px solid var(--border);border-radius:7px;
+  background:var(--bg2);color:var(--text);
+  font-family:'Inter',sans-serif;font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.btn-next:hover:not(:disabled){border-color:var(--c5);color:var(--c5);}
+.btn-next:disabled{opacity:.35;cursor:default;}
+
+/* ══════════════════════════════════════
+   RESULTADOS
+══════════════════════════════════════ */
+.res-top{
+  text-align:center;padding:2rem 0 1.5rem;
+  border-bottom:1px solid var(--border);margin-bottom:1.5rem;
+}
+.grade-ring{
+  width:120px;height:120px;border-radius:50%;
+  border:4px solid var(--border);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;
+  margin:0 auto 1.1rem;transition:all .4s;
+}
+.grade-ring.pass{border-color:#2D6A4F;box-shadow:0 0 28px rgba(45,106,79,.2);}
+.grade-ring.fail{border-color:var(--c1);box-shadow:0 0 20px rgba(230,57,70,.15);}
+.gpct{font-size:2.1rem;font-weight:800;letter-spacing:-.04em;line-height:1;}
+.gpct.pass{color:#2D6A4F;}
+.gpct.fail{color:var(--c1);}
+.gsub{font-size:.6rem;color:var(--muted);letter-spacing:.08em;margin-top:.15rem;font-family:'JetBrains Mono',monospace;}
+.sname{font-size:1rem;font-weight:700;margin-bottom:.25rem;}
+.sci{font-size:.78rem;color:var(--muted);margin-bottom:.4rem;font-family:'JetBrains Mono',monospace;}
+.verd{
+  font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  padding:.3rem 1rem;border-radius:20px;display:inline-block;margin-top:.3rem;
+}
+.verd.pass{background:#eef8f3;color:#2D6A4F;border:1px solid rgba(45,106,79,.3);}
+.verd.fail{background:#fff0f0;color:var(--c1);border:1px solid rgba(230,57,70,.3);}
+
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1.4rem;}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:.85rem;text-align:center;}
+.stat-v{font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:700;display:block;margin-bottom:.15rem;}
+.stat-l{font-size:.6rem;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;}
+
+/* por-quiz scores */
+.qz-row{display:grid;grid-template-columns:repeat(5,1fr);gap:.45rem;margin-bottom:1.3rem;}
+.qzs{border-radius:7px;padding:.6rem .3rem;text-align:center;border:1px solid var(--border);}
+.qzs-label{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.2rem;}
+.qzs-val{font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:700;}
+
+/* revisión */
+.sec-title{
+  font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin:1.3rem 0 .65rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.rev-item{
+  background:var(--bg2);border:1px solid var(--border);
+  border-left:3px solid var(--border);border-radius:8px;
+  padding:.9rem 1rem;margin-bottom:.55rem;
+}
+.rev-item.ok{border-left-color:#2D6A4F;}
+.rev-item.ko{border-left-color:var(--c1);}
+.rev-q{font-size:.8rem;line-height:1.5;margin-bottom:.4rem;}
+.rev-ans{font-size:.73rem;display:flex;gap:.9rem;flex-wrap:wrap;}
+.rev-yours{color:var(--muted);}
+.rev-corr{color:#2D6A4F;font-weight:600;}
+.rev-expl{font-size:.72rem;color:var(--c5);margin-top:.35rem;line-height:1.5;font-style:italic;}
+
+/* ranking */
+.lb-row{
+  display:flex;align-items:center;gap:.9rem;
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:.65rem .9rem;margin-bottom:.4rem;font-size:.78rem;
+}
+.lb-row.me{border-color:var(--c5);background:var(--c5l);}
+.lb-rank{font-family:'JetBrains Mono',monospace;font-size:.78rem;font-weight:700;min-width:24px;}
+.lb-name{flex:1;font-weight:600;}
+.lb-meta{font-size:.65rem;color:var(--muted);}
+.lb-nota{font-family:'JetBrains Mono',monospace;font-size:.9rem;font-weight:700;min-width:48px;text-align:right;}
+.lb-nota.pass{color:#2D6A4F;}
+.lb-nota.fail{color:var(--c1);}
+
+/* gh status */
+.gh-status{
+  display:flex;align-items:center;gap:.5rem;
+  font-size:.65rem;color:var(--muted);padding:.45rem .8rem;
+  background:var(--bg3);border:1px solid var(--border);border-radius:6px;margin-bottom:.8rem;
+}
+.gh-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+
+/* action row */
+.actrow{display:flex;gap:.6rem;margin-top:1.5rem;flex-wrap:wrap;}
+.btn-act{
+  padding:.7rem 1.3rem;border:1.5px solid var(--border);border-radius:7px;
+  background:var(--bg2);color:var(--text);
+  font-family:'Inter',sans-serif;font-size:.8rem;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.btn-act:hover{border-color:var(--c5);color:var(--c5);}
+.btn-act.primary{background:var(--c5);color:#fff;border-color:var(--c5);flex:1;min-width:160px;justify-content:center;}
+.btn-act.primary:hover{background:#162840;}
+
+/* footer */
+.page-footer{
+  text-align:center;padding:.75rem;
+  font-size:.65rem;color:var(--muted);
+  font-family:'JetBrains Mono',monospace;
+  border-top:1px solid var(--border);margin-top:2rem;
+}
+
+@media(max-width:520px){
+  .stats-grid,.qz-row{grid-template-columns:repeat(2,1fr);}
+  .fld-row{grid-template-columns:1fr;}
+  .qsel-grid{grid-template-columns:repeat(5,1fr);}
+}
+</style>
+</head>
+<body>
+
+<!-- ── CABECERA ── -->
+<header class="site-header">
+  <div class="hdr-left">
+    <strong>Mini Quiz</strong> · Diferencias Finitas · Análisis Numérico
+  </div>
+  <div class="hdr-right">Yerko Aldair Quispe Ticona</div>
+</header>
+
+<div class="wrap">
+
+<!-- ════════════════════════════════════
+     PANTALLA: REGISTRO
+════════════════════════════════════ -->
+<div class="screen on" id="s-reg">
+
+  <div class="reg-hero">
+    <span class="emoji">🚀</span>
+    <h1>Mini Quiz<br><span>Diferencias Finitas</span></h1>
+    <p>10 quizzes · ~5 min por quiz</p>
+    <p style="font-size:.72rem;opacity:.65;margin-top:.3rem;">🔐 Cada quiz tiene contraseña individual</p>
+    <div class="reg-sub">Diferencias Finitas · Análisis Numérico · Gestión 2026</div>
+  </div>
+
+  <div class="reg-card">
+    <h2>📋 Datos del Estudiante</h2>
+
+    <div class="fld">
+      <label>Nombre y Apellido</label>
+      <input id="i-name" type="text" placeholder="Ej: Juan Carlos Mamani Flores">
+    </div>
+
+    <div class="fld">
+      <label>Carnet de Identidad (CI)</label>
+      <input id="i-ci" type="text" placeholder="Ej: 12345678" oninput="updateDoneBadges()">
+    </div>
+
+    <div class="quiz-sel-title">Seleccionar Quiz(zes) a rendir</div>
+    <div class="qsel-grid">
+      <button class="qsel-btn"    onclick="toggleQ(this,1)">Q1</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,2)">Q2</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,3)">Q3</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,4)">Q4</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,5)">Q5</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,6)">Q6</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,7)">Q7</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,8)">Q8</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,9)">Q9</button>
+      <button class="qsel-btn"    onclick="toggleQ(this,10)">Q10</button>
+    </div>
+
+    <!-- Badge GitHub (aparece si hay token en la URL) -->
+    <div class="gh-info" id="gh-info">
+      <span>✓</span><span>Notas se guardarán automáticamente en GitHub</span>
+    </div>
+
+    <!-- Aviso quizzes ya rendidos -->
+    <div class="already-done-warn" id="already-warn">
+      <span>⚠</span>
+      <span id="already-warn-txt">Ya rendiste algunos de los quizzes seleccionados.</span>
+    </div>
+    <div class="ci-check-note" id="ci-note">
+      Ingresa tu CI para ver qué quizzes ya rendiste.
+    </div>
+
+    <p class="err-msg" id="reg-err">⚠ Por favor completa todos los campos.</p>
+    <button class="btn-start" onclick="begin()">▶ &nbsp;Comenzar Quiz</button>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════
+     PANTALLA: QUIZ
+════════════════════════════════════ -->
+<div class="screen" id="s-quiz">
+  <div class="quiz-topbar">
+    <div class="qz-label" id="qz-label">Q1 · P1</div>
+    <div class="prog-track">
+      <div class="prog-fill" id="prog-fill" style="width:0%"></div>
+    </div>
+    <div class="timer-badge" id="timer-badge">5:00</div>
+  </div>
+
+  <div class="qcard" id="qcard">
+    <div class="qcard-header">
+      <span class="qcard-tag" id="qtag">Opción Múltiple</span>
+      <span class="qcard-num" id="qnum">Pregunta 1 de 4</span>
+    </div>
+    <div class="qcard-body">
+      <div class="qtxt" id="qtxt"></div>
+      <div id="qcode" style="display:none"></div>
+      <div id="qbody"></div>
+      <div class="fb-box" id="fb-box">
+        <div class="fb-ico" id="fb-ico"></div>
+        <div id="fb-txt"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qnav">
+    <div class="live-score">Aciertos: <strong id="live">0</strong></div>
+    <button class="btn-next" id="btn-next" onclick="nextQ()" disabled>Siguiente →</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     PANTALLA: RESULTADOS
+════════════════════════════════════ -->
+<div class="screen" id="s-res">
+
+  <div class="res-top">
+    <div class="grade-ring" id="grade-ring">
+      <div class="gpct" id="gpct"></div>
+      <div class="gsub">NOTA</div>
+    </div>
+    <div class="sname" id="res-name"></div>
+    <div class="sci"   id="res-ci"></div>
+    <div class="verd"  id="res-verd"></div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat"><span class="stat-v" id="rs-ok">0</span><div class="stat-l">Correctas</div></div>
+    <div class="stat"><span class="stat-v" id="rs-ko">0</span><div class="stat-l">Incorrectas</div></div>
+    <div class="stat"><span class="stat-v" id="rs-tot">0</span><div class="stat-l">Total Px</div></div>
+    <div class="stat"><span class="stat-v" id="rs-t">0s</span><div class="stat-l">Tiempo</div></div>
+  </div>
+
+  <div class="sec-title">Puntaje por Quiz</div>
+  <div class="qz-row" id="qz-scores"></div>
+
+  <div class="sec-title">Estado GitHub</div>
+  <div class="gh-status">
+    <div class="gh-dot" id="gh-dot"></div>
+    <span id="gh-msg">Sin token configurado — notas guardadas localmente.</span>
+  </div>
+
+  <div class="sec-title">Revisión de Respuestas</div>
+  <div id="rev-list"></div>
+
+  <div class="sec-title">Registro de Notas</div>
+  <div id="lb-list"></div>
+
+  <div class="actrow">
+    <button class="btn-act primary" onclick="retry()">↺ &nbsp;Nuevo Intento</button>
+    <button class="btn-act" onclick="doCSV()">⬇ CSV</button>
+    <button class="btn-act" onclick="doClr()">🗑 Limpiar</button>
+  </div>
+
+</div>
+
+<div class="page-footer">
+  Mini Quiz · Diferencias Finitas · Análisis Numérico 2026<br>
+  Elaborado por Yerko Aldair Quispe Ticona
+</div>
+
+</div><!-- /wrap -->
+
+<!-- ════ MODAL CONTRASEÑA ════ -->
+<div class="pw-overlay hidden" id="pw-overlay">
+  <div class="pw-modal">
+    <span class="pw-icon" id="pw-icon">🔐</span>
+    <div class="pw-title" id="pw-title">Contraseña requerida</div>
+    <div class="pw-sub" id="pw-sub">Ingresa la contraseña para acceder al quiz</div>
+    <input class="pw-inp" id="pw-inp" type="password"
+      placeholder="••••••"
+      onkeydown="if(event.key==='Enter') checkPassword()">
+    <button class="pw-btn" id="pw-btn" onclick="checkPassword()">
+      Ingresar →
+    </button>
+    <div class="pw-err" id="pw-err">⚠ Contraseña incorrecta</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  COLORES POR QUIZ (fieles al .tex)
+// ══════════════════════════════════════════════════════════
+const QZ_COLORS = {
+  1:'#E63946', 2:'#D4762A', 3:'#2A9D8F', 4:'#6A0572', 5:'#1D3557',
+  6:'#C45E3A', 7:'#457B9D', 8:'#2D6A4F', 9:'#9B2226', 10:'#3A0CA3'
+};
+const QZ_COLORS_L = {
+  1:'#FFF0F0', 2:'#FFF6EE', 3:'#EDFAF8', 4:'#F8EEFB', 5:'#EEF3FA',
+  6:'#FDF2EE', 7:'#EDF4FA', 8:'#EEF8F3', 9:'#FDECEA', 10:'#EDE7FB'
+};
+
+// ══════════════════════════════════════════════════════════
+//  BANCO DE PREGUNTAS — REEMPLAZAR CON EL NUEVO TEMA
+//  Estructura de cada quiz:
+//    type:"mc"   → opción múltiple (opts:[a,b,c,d], ok: índice 0-3)
+//    type:"vf"   → verdadero/falso (ok: true o false)
+//    code:`...`  → bloque de código (solo en Q con código, primer qIdx)
+//    fb:"..."    → feedback con LaTeX usando \\( ... \\)
+// ══════════════════════════════════════════════════════════
+const QUIZZES = {
+
+/* ══════════════════════════════════════════════════════════
+   Q1 · VELOCIDAD  (Velocidad.py)
+══════════════════════════════════════════════════════════ */
+1:{
+  title:"Velocidad",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="cm"># parámetros</span>
+h=<span class="nm">1</span>;  T=<span class="nm">400</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>;  g=<span class="nm">9.81</span>;  β=<span class="nm">5</span>
+v0=<span class="nm">0</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+<span class="cm"># solución analítica por fases</span>
+n=<span class="nm">1</span>-μ*t/m0
+p=β/μ
+v1=v0*n**p+g*m0*(n-n**p)/(μ-β)+μ*ve*(<span class="nm">1</span>-n**p)/β
+mf=m0-μ*tc
+v2=-mf*g*(<span class="nm">1</span>-np.exp(-β*(t-tc)/mf))/β+v1[tc]*np.exp(-β*(t-tc)/mf)
+v=np.where(t&lt;tc, v1, v2)
+plt.plot(t, v)
+plt.axvline(x=tc, color=<span class="st">'r'</span>, linestyle=<span class="st">'--'</span>)
+plt.axhline(y=-mf*g/β, color=<span class="st">'g'</span>, linestyle=<span class="st">'--'</span>)
+plt.grid(<span class="kw">True</span>)`,
+  qs:[
+    {type:"mc",
+     txt:"¿Qué valor numérico toma la masa final \\(m_f\\) del cohete con los parámetros del código?",
+     opts:["\\(m_f = 1000\\,\\text{kg}\\)","\\(m_f = 500\\,\\text{kg}\\)","\\(m_f = 200\\,\\text{kg}\\)","\\(m_f = 800\\,\\text{kg}\\)"],
+     ok:2,
+     fb:"CORRECTO. \\(m_f = m_0 - \\mu\\,t_c = 1000 - 10\\times80 = 200\\,\\text{kg}\\). Esta es la masa del cohete una vez consumido todo el combustible en \\(t_c=80\\,\\text{s}\\)."},
+    {type:"mc",
+     txt:"La línea <code>plt.axhline(y=-mf*g/β, ...)</code> dibuja una línea horizontal en:",
+     opts:["La velocidad inicial del cohete","La velocidad máxima durante la propulsión","La velocidad terminal \\(v_\\infty = -m_f g/\\beta\\) de la fase sin empuje","El tiempo de apagado del motor \\(t_c\\)"],
+     ok:2,
+     fb:"CORRECTO. En la fase sin propulsión, en el equilibrio (\\(\\dot{v}=0\\)) la ecuación \\(m_f\\dot{v}=-m_f g-\\beta v\\) da la velocidad terminal \\(v_\\infty = -m_f g/\\beta = -200\\times9.81/5 = -392.4\\,\\text{m/s}\\)."},
+    {type:"vf",
+     txt:"La solución analítica se calcula en dos partes: \\(v_1\\) para la fase propulsada (\\(t < t_c\\)) y \\(v_2\\) para la fase sin empuje (\\(t \\geq t_c\\)), y se unen con <code>np.where</code>.",
+     ok:true,
+     fb:"VERDADERO. La física del cohete cambia radicalmente al apagarse el motor. El código calcula <code>v1</code> (con empuje) y <code>v2</code> (sin empuje, solo gravedad y rozamiento), combinándolos con <code>np.where(t&lt;tc, v1, v2)</code>."},
+    {type:"vf",
+     txt:"La variable <code>n = 1 - μ·t/m₀</code> representa la fracción de masa restante del cohete en cada instante \\(t\\).",
+     ok:true,
+     fb:"VERDADERO. \\(n = 1 - \\mu t/m_0 = m(t)/m_0\\) es la fracción de masa normalizada respecto a la masa inicial. Aparece como base en las potencias de la solución analítica \\(v_1\\)."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q2 · BETAS  (betas.py)
+══════════════════════════════════════════════════════════ */
+2:{
+  title:"Betas",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>;  g=<span class="nm">9.81</span>
+v0=<span class="nm">0</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+betas=[<span class="nm">0</span>, <span class="nm">0.5</span>, <span class="nm">1</span>, <span class="nm">2</span>, <span class="nm">5</span>, <span class="nm">10</span>]
+<span class="kw">for</span> β <span class="kw">in</span> betas:
+    n=<span class="nm">1</span>-μ*t/m0
+    p=β/μ
+    v1=v0*n**p+g*m0*(n-n**p)/(μ-β)+μ*ve*(<span class="nm">1</span>-n**p)/β
+    mf=m0-μ*tc
+    v2=-mf*g*(<span class="nm">1</span>-np.exp(-β*(t-tc)/mf))/β+v1[tc]*np.exp(-β*(t-tc)/mf)
+    v=np.where(t&lt;tc, v1, v2)
+    plt.plot(t, v, label=<span class="st">f'β={β}'</span>)`,
+  qs:[
+    {type:"mc",
+     txt:"En el código, ¿qué representa la variable <code>p = β/μ</code>?",
+     opts:["El tiempo total de simulación en segundos","El tiempo de quema del combustible \\(t_c\\)","El exponente adimensional que aparece en la solución analítica \\(v_1\\)","La velocidad terminal del cohete"],
+     ok:2,
+     fb:"CORRECTO. \\(p = \\beta/\\mu\\) es un exponente adimensional que surge de la solución de la EDO durante la fase propulsada. Aparece como potencia de \\(n=(1-\\mu t/m_0)\\) en la expresión de \\(v_1\\)."},
+    {type:"mc",
+     txt:"¿Cuántas curvas de velocidad genera el código en total?",
+     opts:["2 curvas","4 curvas","6 curvas","10 curvas"],
+     ok:2,
+     fb:"CORRECTO. La lista <code>betas=[0, 0.5, 1, 2, 5, 10]</code> tiene 6 elementos. El bucle <code>for β in betas</code> itera 6 veces, generando una curva por cada valor de \\(\\beta\\)."},
+    {type:"vf",
+     txt:"Al aumentar \\(\\beta\\), la velocidad máxima del cohete disminuye porque \\(\\beta\\) representa el coeficiente de rozamiento aerodinámico.",
+     ok:true,
+     fb:"VERDADERO. \\(\\beta\\) es el coeficiente de rozamiento. Al aumentar \\(\\beta\\), la fuerza de fricción \\(F_{roz}=\\beta v\\) crece y frena más al cohete, reduciendo la velocidad máxima alcanzada."},
+    {type:"vf",
+     txt:"La variable <code>v1[tc]</code> que aparece en la fórmula de <code>v2</code> representa la velocidad del cohete exactamente en el momento en que se apaga el motor.",
+     ok:true,
+     fb:"VERDADERO. <code>v1[tc]</code> es la velocidad al final de la fase propulsada (\\(t=t_c=80\\,\\text{s}\\)), y se usa como condición inicial de <code>v2</code>, la solución para la fase sin empuje."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q3 · MARTE  (marte.py)
+══════════════════════════════════════════════════════════ */
+3:{
+  title:"Marte",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>
+v0=<span class="nm">0</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+gravedad=[<span class="nm">9.81</span>, <span class="nm">3.72</span>]
+betas=[<span class="nm">0.259</span>, <span class="nm">0.004</span>]
+<span class="kw">for</span> g, β <span class="kw">in</span> zip(gravedad, betas):
+    n=<span class="nm">1</span>-μ*t/m0
+    p=β/μ
+    v1=v0*n**p+g*m0*(n-n**p)/(μ-β)+μ*ve*(<span class="nm">1</span>-n**p)/β
+    mf=m0-μ*tc
+    v2=-mf*g*(<span class="nm">1</span>-np.exp(-β*(t-tc)/mf))/β+v1[tc]*np.exp(-β*(t-tc)/mf)
+    v=np.where(t&lt;tc, v1, v2)
+    plt.plot(t, v, label=<span class="st">f'g={g} β={β}'</span>)`,
+  qs:[
+    {type:"mc",
+     txt:"¿Qué pares de valores compara el código con <code>zip(gravedad, betas)</code>?",
+     opts:["Tierra: g=9.81, β=0.004 — Marte: g=3.72, β=0.259","Tierra: g=9.81, β=0.259 — Marte: g=3.72, β=0.004","Tierra: g=3.72, β=0.004 — Marte: g=9.81, β=0.259","Solo se usa g=9.81 para ambos planetas"],
+     ok:1,
+     fb:"CORRECTO. <code>zip</code> empareja en orden: primero Tierra (g=9.81, β=0.259) y luego Marte (g=3.72, β=0.004). La gravedad marciana es ≈38% la terrestre."},
+    {type:"mc",
+     txt:"¿Por qué Marte tiene un valor de \\(\\beta\\) mucho menor que la Tierra?",
+     opts:["Porque Marte tiene mayor gravedad superficial","Porque la atmósfera de Marte es mucho más delgada, reduciendo la resistencia aerodinámica","Porque el cohete va más lento en Marte","Porque la masa del cohete cambia diferente en Marte"],
+     ok:1,
+     fb:"CORRECTO. La atmósfera de Marte tiene una presión de ≈0.6% la terrestre, por lo que la resistencia aerodinámica es mínima y \\(\\beta_{Marte}=0.004 \\ll \\beta_{Tierra}=0.259\\)."},
+    {type:"vf",
+     txt:"En Marte, el cohete alcanza mayor velocidad máxima que en la Tierra con los mismos parámetros de propulsión.",
+     ok:true,
+     fb:"VERDADERO. La menor gravedad (g=3.72 m/s²) y la menor resistencia atmosférica (β=0.004) en Marte permiten al cohete alcanzar velocidades significativamente mayores que en la Tierra."},
+    {type:"vf",
+     txt:"Con los parámetros del código, la masa final del cohete al apagarse el motor es \\(m_f = 200\\,\\text{kg}\\) tanto para Tierra como para Marte.",
+     ok:true,
+     fb:"VERDADERO. <code>mf = m0 - μ*tc = 1000 - 10×80 = 200 kg</code>. La masa final es la misma en ambos casos porque \\(m_0\\), \\(\\mu\\) y \\(t_c\\) son idénticos; solo cambian \\(g\\) y \\(\\beta\\) según el planeta."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q4 · MASA  (Masa.py)
+══════════════════════════════════════════════════════════ */
+4:{
+  title:"Masa",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+m=np.where(t&lt;tc, m0-μ*t, m0-μ*tc)
+plt.plot(t, m)
+plt.title(<span class="st">f"Masa m(t)  |  m₀={m0} kg  μ={μ} kg/s"</span>, fontweight=<span class="st">'bold'</span>)
+plt.xlabel(<span class="st">'Tiempo [s]'</span>);  plt.ylabel(<span class="st">'Masa [kg]'</span>)
+plt.savefig(<span class="st">'masa.png'</span>);  plt.show()`,
+  qs:[
+    {type:"mc",
+     txt:"Con los parámetros del código, ¿cuál es la masa del cohete en \\(t = t_c = 80\\,\\text{s}\\)?",
+     opts:["\\(200\\,\\text{kg}\\)","\\(800\\,\\text{kg}\\)","\\(1000\\,\\text{kg}\\)","\\(180\\,\\text{kg}\\)"],
+     ok:0,
+     fb:"CORRECTO. \\(m(t_c) = m_0 - \\mu\\,t_c = 1000 - 10\\times80 = 200\\,\\text{kg}\\). Esta es la masa seca del cohete una vez consumido todo el combustible."},
+    {type:"mc",
+     txt:"¿Qué forma tiene la gráfica de \\(m(t)\\) generada por el código?",
+     opts:["Una curva exponencial decreciente en todo \\([0,T]\\)","Una recta decreciente hasta \\(t_c\\) y luego horizontal constante en \\(m_f\\)","Una parábola cóncava hacia arriba","Una sinusoide amortiguada"],
+     ok:1,
+     fb:"CORRECTO. \\(m(t)=m_0-\\mu t\\) es una recta decreciente durante la propulsión. Al llegar a \\(t_c=80\\,\\text{s}\\) el combustible se agota y la masa queda constante en \\(m_f=200\\,\\text{kg}\\) para el resto de la simulación."},
+    {type:"vf",
+     txt:"Sin la condición que limita la masa a \\(m_f\\), el arreglo <code>m</code> tomaría valores negativos para \\(t > t_c\\), lo cual es físicamente imposible.",
+     ok:true,
+     fb:"VERDADERO. Si no se aplica la restricción, \\(m = m_0 - \\mu t\\) seguiría decreciendo: en \\(t=120\\,\\text{s}\\) daría \\(1000-10\\times120=-200\\,\\text{kg}\\). <code>np.where</code> evita esto fijando la masa en \\(m_f\\) cuando \\(t\\geq t_c\\)."},
+    {type:"vf",
+     txt:"La masa total de combustible quemado durante la propulsión es de \\(800\\,\\text{kg}\\).",
+     ok:true,
+     fb:"VERDADERO. El combustible quemado es \\(\\Delta m = \\mu\\cdot t_c = 10\\times80 = 800\\,\\text{kg}\\), que es la diferencia entre la masa inicial \\(m_0=1000\\,\\text{kg}\\) y la masa final \\(m_f=200\\,\\text{kg}\\)."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q5 · DIFERENCIAS FINITAS 1er ORDEN — TEORÍA
+══════════════════════════════════════════════════════════ */
+5:{
+  title:"Diferencias Finitas 1er Orden (Teoría)",
+  qs:[
+    {type:"mc",
+     txt:"La diferencia finita hacia adelante de primer orden aproxima la derivada \\(f'(x)\\) como:",
+     opts:["\\(\\dfrac{f(x+h)-f(x-h)}{2h}\\)","\\(\\dfrac{f(x+h)-f(x)}{h}\\)","\\(\\dfrac{f(x)-f(x-h)}{h}\\)","\\(\\dfrac{f(x+h)-2f(x)+f(x-h)}{h^2}\\)"],
+     ok:1,
+     fb:"CORRECTO. La diferencia finita hacia adelante es \\( f'(x) \\approx \\dfrac{f(x+h)-f(x)}{h} \\), con error de truncamiento \\(O(h)\\) (primer orden)."},
+    {type:"mc",
+     txt:"El error de truncamiento del método de Euler (diferencias finitas de 1er orden) es proporcional a:",
+     opts:["\\(h^4\\)","\\(h^2\\)","\\(h\\)","\\(h^3\\)"],
+     ok:2,
+     fb:"CORRECTO. El método de Euler tiene error local de truncamiento \\(O(h^2)\\) y error global \\(O(h)\\). Si se reduce el paso a la mitad, el error global se reduce también a la mitad."},
+    {type:"vf",
+     txt:"El método de Euler explícito calcula el estado siguiente usando únicamente información del paso actual: \\(y_{i+1} = y_i + h\\,f(t_i, y_i)\\).",
+     ok:true,
+     fb:"VERDADERO. Euler explícito es un método de un solo paso hacia adelante. Solo necesita el valor actual \\(y_i\\) y la derivada evaluada en el punto presente para avanzar."},
+    {type:"vf",
+     txt:"Las diferencias finitas de primer orden tienen el mismo orden de precisión que las diferencias centradas.",
+     ok:false,
+     fb:"FALSO. Las diferencias finitas de primer orden (hacia adelante o atrás) tienen error \\(O(h)\\), mientras que las diferencias centradas tienen error \\(O(h^2)\\), siendo más precisas con el mismo paso \\(h\\)."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q6 · EULER  (euler.py)
+══════════════════════════════════════════════════════════ */
+6:{
+  title:"Euler",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>;  g=<span class="nm">9.81</span>;  β=<span class="nm">5</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+m=np.where(t&lt;tc, m0-μ*t, m0-μ*tc)
+n=len(t)
+v=np.zeros(n);  x=np.zeros(n)
+x[<span class="nm">0</span>]=<span class="nm">0</span>;  v[<span class="nm">0</span>]=<span class="nm">0</span>
+<span class="kw">for</span> i <span class="kw">in</span> range(n-<span class="nm">1</span>):
+    x[i+<span class="nm">1</span>]=x[i]+v[i]*h
+    v[i+<span class="nm">1</span>]=(v[i]+h*(ve*μ-m[i]*g-β*v[i])/m[i]
+             <span class="kw">if</span> t[i]&lt;=tc
+             <span class="kw">else</span> v[i]+h*(-m[i]*g-β*v[i])/m[i])`,
+  qs:[
+    {type:"mc",
+     txt:"¿Cuál es la fórmula de actualización de posición en el método de Euler del código?",
+     opts:["\\(x_{i+1} = x_i + v_{i+1}\\,h\\)","\\(x_{i+1} = x_i + v_i\\,h\\)","\\(x_{i+1} = 2x_i - x_{i-1} + h^2\\,a_i\\)","\\(x_{i+1} = x_i + h\\,(v_i + v_{i+1})/2\\)"],
+     ok:1,
+     fb:"CORRECTO. El código usa <code>x[i+1]=x[i]+v[i]*h</code>, que es la fórmula de Euler explícito: \\(x_{i+1} = x_i + v_i\\,h\\). La velocidad se toma en el instante actual \\(i\\), no en el siguiente."},
+    {type:"mc",
+     txt:"Durante la fase propulsada (\\(i\\cdot h \\leq t_c\\)), ¿cuál es la aceleración neta usada en la actualización de velocidad?",
+     opts:["\\(a = \\dfrac{-m_i g - \\beta v_i}{m_i}\\)","\\(a = \\dfrac{v_e\\mu - m_i g}{m_i}\\)","\\(a = \\dfrac{v_e\\mu - m_i g - \\beta v_i}{m_i}\\)","\\(a = \\dfrac{v_e\\mu}{m_i}\\)"],
+     ok:2,
+     fb:"CORRECTO. La aceleración en la fase propulsada es \\( a = \\dfrac{F_{empuje} - F_{peso} - F_{rozamiento}}{m} = \\dfrac{v_e\\mu - mg - \\beta v}{m} \\), que es exactamente el numerador del código."},
+    {type:"vf",
+     txt:"En el método de Euler, la posición <code>x[i+1]</code> se calcula usando la velocidad del paso <strong>actual</strong> \\(v_i\\), no la del paso siguiente \\(v_{i+1}\\).",
+     ok:true,
+     fb:"VERDADERO. La fórmula <code>x[i+1]=x[i]+v[i]*h</code> usa \\(v_i\\) (paso actual). Esto es característico de Euler explícito: toda la información proviene del instante presente, lo que lo hace simple pero introduce error acumulativo \\(O(h)\\)."},
+    {type:"vf",
+     txt:"Después de \\(t_c\\), la aceleración en el código cambia a \\(a = (-m_i g - \\beta v_i)/m_i\\) porque ya no hay fuerza de empuje.",
+     ok:true,
+     fb:"VERDADERO. Una vez apagado el motor (\\(t > t_c\\)), el término de empuje \\(v_e\\mu\\) desaparece. La única fuerza propulsiva se cancela y quedan solo la gravedad y el rozamiento: \\(a = (-mg - \\beta v)/m\\)."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q7 · DIFERENCIAS FINITAS 2do ORDEN — TEORÍA
+══════════════════════════════════════════════════════════ */
+7:{
+  title:"Diferencias Finitas 2do Orden (Teoría)",
+  qs:[
+    {type:"mc",
+     txt:"La diferencia centrada de segundo orden para la segunda derivada \\(f''(x)\\) es:",
+     opts:["\\(\\dfrac{f(x+h)-f(x)}{h^2}\\)","\\(\\dfrac{f(x+h)-2f(x)+f(x-h)}{h^2}\\)","\\(\\dfrac{f(x+h)-f(x-h)}{2h}\\)","\\(\\dfrac{-f(x+2h)+4f(x+h)-3f(x)}{2h}\\)"],
+     ok:1,
+     fb:"CORRECTO. La aproximación centrada de \\(f''\\) es \\( f''(x) \\approx \\dfrac{f(x+h)-2f(x)+f(x-h)}{h^2} \\), con error \\(O(h^2)\\). Es la base del algoritmo de Verlet."},
+    {type:"mc",
+     txt:"Una ventaja de los métodos de diferencias finitas de 2do orden frente a los de 1er orden es:",
+     opts:["Requieren menos pasos de tiempo para converger","El error global escala como \\(O(h^2)\\), siendo más preciso para el mismo paso \\(h\\)","Son siempre estables incondicionalmente","Solo necesitan la condición inicial en \\(t=0\\)"],
+     ok:1,
+     fb:"CORRECTO. Al pasar de \\(O(h)\\) a \\(O(h^2)\\), si se reduce \\(h\\) a la mitad el error se reduce a la cuarta parte en los métodos de 2do orden, contra solo a la mitad en los de 1er orden."},
+    {type:"vf",
+     txt:"Los métodos de diferencias finitas de 2do orden como Verlet requieren conocer la solución en <strong>dos</strong> instantes previos (\\(x_i\\) y \\(x_{i-1}\\)) para calcular \\(x_{i+1}\\).",
+     ok:true,
+     fb:"VERDADERO. Verlet usa \\(x_{i+1} = 2x_i - x_{i-1} + h^2 a_i\\), necesitando dos pasos anteriores. Por eso el código inicializa tanto <code>x[0]</code> como <code>x[1]</code> antes del bucle principal."},
+    {type:"vf",
+     txt:"La diferencia centrada de primer orden \\(\\dfrac{f(x+h)-f(x-h)}{2h}\\) tiene error de truncamiento \\(O(h)\\).",
+     ok:false,
+     fb:"FALSO. La diferencia centrada \\(\\dfrac{f(x+h)-f(x-h)}{2h}\\) tiene error \\(O(h^2)\\), no \\(O(h)\\). Al ser simétrica, los términos de orden \\(h\\) se cancelan en la expansión de Taylor, dando precisión de segundo orden."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q8 · VERLET  (verlet.py)
+══════════════════════════════════════════════════════════ */
+8:{
+  title:"Verlet",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>;  g=<span class="nm">9.81</span>;  β=<span class="nm">5</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+m=np.where(t&lt;tc, m0-μ*t, m0-μ*tc)
+n=len(t)
+v=np.zeros(n);  x=np.zeros(n)
+x[<span class="nm">0</span>]=<span class="nm">0</span>;  v[<span class="nm">0</span>]=<span class="nm">0</span>
+x[<span class="nm">1</span>]=x[<span class="nm">0</span>]+v[<span class="nm">0</span>]*h
+v[<span class="nm">1</span>]=v[<span class="nm">0</span>]+h*(ve*μ-m[<span class="nm">0</span>]*g-β*v[<span class="nm">0</span>])/m[<span class="nm">0</span>]
+<span class="kw">for</span> i <span class="kw">in</span> range(<span class="nm">1</span>, n-<span class="nm">1</span>):
+    x[i+<span class="nm">1</span>]=(
+      <span class="nm">2</span>*x[i]-x[i-<span class="nm">1</span>]+h**<span class="nm">2</span>*(ve*μ-m[i]*g-β*v[i])/m[i]
+      <span class="kw">if</span> t[i]&lt;=tc
+      <span class="kw">else</span> <span class="nm">2</span>*x[i]-x[i-<span class="nm">1</span>]+h**<span class="nm">2</span>*(-m[i]*g-β*v[i])/m[i])
+    v[i+<span class="nm">1</span>]=(v[i-<span class="nm">1</span>]+<span class="nm">2</span>*h*(ve*μ-m[i]*g-β*v[i])/m[i]
+      <span class="kw">if</span> t[i]&lt;=tc
+      <span class="kw">else</span> v[i]+h*(-m[i]*g-β*v[i])/m[i])`,
+  qs:[
+    {type:"mc",
+     txt:"¿Por qué el bucle de Verlet comienza en <code>range(1, n-1)</code> en lugar de <code>range(0, n-1)</code>?",
+     opts:["Para evitar desbordamiento de índice en el arreglo","Porque Verlet necesita dos valores previos \\(x_i\\) y \\(x_{i-1}\\), que se calculan antes del bucle como condición de arranque","Porque el primer paso ya fue calculado por el método de Euler","Porque el tiempo 0 no forma parte de la simulación"],
+     ok:1,
+     fb:"CORRECTO. Verlet usa \\(x_{i+1}=2x_i - x_{i-1}+h^2 a_i\\). Para \\(i=1\\) necesita \\(x_1\\) y \\(x_0\\), ambos calculados en las líneas de inicialización antes del bucle."},
+    {type:"mc",
+     txt:"¿Cuál es el valor numérico de <code>v[1]</code> calculado antes del bucle, con los parámetros del código?",
+     opts:["\\(v[1] = 0\\,\\text{m/s}\\)","\\(v[1] = h\\cdot(v_e\\mu - m_0 g - \\beta v_0)/m_0\\)","\\(v[1] = v_0 + h\\cdot g\\)","\\(v[1] = 2v_0 - v_{-1}\\)"],
+     ok:1,
+     fb:"CORRECTO. La línea <code>v[1]=v[0]+h*(ve*μ-m[0]*g-β*v[0])/m[0]</code> aplica un paso de Euler para arrancar el método. Con \\(v_0=0\\): \\(v[1] = 1\\times(1000\\times10 - 1000\\times9.81 - 5\\times0)/1000 = 0.19\\,\\text{m/s}\\)."},
+    {type:"vf",
+     txt:"La fórmula de actualización de posición en Verlet es \\(x_{i+1} = 2x_i - x_{i-1} + h^2\\,a_i\\), que es de segundo orden en \\(h\\).",
+     ok:true,
+     fb:"VERDADERO. Verlet combina las series de Taylor de \\(x(t+h)\\) y \\(x(t-h)\\); los términos de primer y tercer orden se cancelan, resultando en un esquema de orden \\(O(h^2)\\) para la posición."},
+    {type:"vf",
+     txt:"En el código de Verlet, la velocidad en la fase propulsada se actualiza con la fórmula centrada \\(v_{i+1} = v_{i-1} + 2h\\,a_i\\), que tiene precisión de segundo orden.",
+     ok:true,
+     fb:"VERDADERO. La fórmula <code>v[i+1]=v[i-1]+2*h*a[i]</code> es la diferencia centrada de velocidad: usa dos pasos anteriores (\\(v_{i-1}\\) y la aceleración actual) y tiene error \\(O(h^2)\\), consistente con el orden del método de Verlet."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q9 · RK4 — TEORÍA
+══════════════════════════════════════════════════════════ */
+9:{
+  title:"RK4 (Teoría)",
+  qs:[
+    {type:"mc",
+     txt:"El método de Runge-Kutta de 4to orden calcula cuatro pendientes \\(k_1, k_2, k_3, k_4\\). ¿Cuál es la actualización final?",
+     opts:["\\(y_{i+1} = y_i + h\\,k_1\\)","\\(y_{i+1} = y_i + \\dfrac{h}{6}(k_1+k_2+k_3+k_4)\\)","\\(y_{i+1} = y_i + \\dfrac{h}{4}(k_1+2k_2+2k_3+k_4)\\)","\\(y_{i+1} = y_i + \\dfrac{h}{6}(k_1+2k_2+2k_3+k_4)\\)"],
+     ok:3,
+     fb:"CORRECTO. La fórmula de RK4 es \\( y_{i+1} = y_i + \\dfrac{h}{6}(k_1+2k_2+2k_3+k_4) \\). Los coeficientes 1,2,2,1 dan un promedio ponderado de las pendientes, con mayor peso a las intermedias."},
+    {type:"mc",
+     txt:"¿En qué punto se evalúa la pendiente \\(k_2\\) en RK4?",
+     opts:["En \\(t_i\\) con \\(y_i\\)","En \\(t_i + h/2\\) usando \\(y_i + h\\,k_1/2\\)","En \\(t_i + h\\) usando \\(y_i + h\\,k_1\\)","En \\(t_i + h/2\\) usando \\(y_i + h\\,k_2/2\\)"],
+     ok:1,
+     fb:"CORRECTO. \\(k_2 = f\\!\\left(t_i+\\tfrac{h}{2},\\; y_i+\\tfrac{h}{2}k_1\\right)\\). Es una estimación de la pendiente en el punto medio del intervalo, usando \\(k_1\\) para aproximar el estado allí."},
+    {type:"vf",
+     txt:"RK4 tiene error de truncamiento local \\(O(h^5)\\) y error global \\(O(h^4)\\), lo que lo hace significativamente más preciso que Euler para el mismo paso \\(h\\).",
+     ok:true,
+     fb:"VERDADERO. RK4 es un método de cuarto orden: al reducir \\(h\\) a la mitad, el error global se reduce a \\(1/2^4 = 1/16\\) del valor anterior, frente a solo \\(1/2\\) en Euler."},
+    {type:"vf",
+     txt:"RK4 es un método multipaso porque necesita los valores de \\(y\\) en cuatro pasos anteriores para calcular \\(y_{i+1}\\).",
+     ok:false,
+     fb:"FALSO. RK4 es un método de <strong>un solo paso</strong> (single-step): solo necesita \\(y_i\\) en el instante actual. Las cuatro pendientes \\(k_1\\ldots k_4\\) se calculan dentro del mismo paso \\([t_i, t_{i+1}]\\)."}
+  ]
+},
+
+/* ══════════════════════════════════════════════════════════
+   Q10 · RK4  (rk4.py)
+══════════════════════════════════════════════════════════ */
+10:{
+  title:"RK4",
+  code:`<span class="kw">import</span> numpy <span class="kw">as</span> np
+h=<span class="nm">1</span>;  T=<span class="nm">200</span>;  tc=<span class="nm">80</span>
+m0=<span class="nm">1000</span>;  μ=<span class="nm">10</span>;  ve=<span class="nm">1000</span>;  g=<span class="nm">9.81</span>;  β=<span class="nm">5</span>
+t=np.arange(<span class="nm">0</span>, T+h, h)
+m=np.where(t&lt;tc, m0-μ*t, m0-μ*tc)
+n=len(t);  s=np.zeros((n, <span class="nm">2</span>));  s[<span class="nm">0</span>]=[<span class="nm">0</span>, <span class="nm">0</span>]
+<span class="kw">def</span> <span class="fn">f</span>(t, s):
+    x, v=s
+    m=m0-μ*t <span class="kw">if</span> t&lt;=tc <span class="kw">else</span> m0-μ*tc
+    dxdt=v
+    dvdt=(ve*μ-m*g-β*v)/m <span class="kw">if</span> t&lt;=tc <span class="kw">else</span> (-m*g-β*v)/m
+    <span class="kw">return</span> np.array([dxdt, dvdt])
+<span class="kw">for</span> i <span class="kw">in</span> range(n-<span class="nm">1</span>):
+    k1=<span class="fn">f</span>(t[i], s[i])
+    k2=<span class="fn">f</span>(t[i]+h/<span class="nm">2</span>, s[i]+h*k1/<span class="nm">2</span>)
+    k3=<span class="fn">f</span>(t[i]+h/<span class="nm">2</span>, s[i]+h*k2/<span class="nm">2</span>)
+    k4=<span class="fn">f</span>(t[i]+h, s[i]+h*k3)
+    s[i+<span class="nm">1</span>]=s[i]+h/<span class="nm">6</span>*(k1+<span class="nm">2</span>*k2+<span class="nm">2</span>*k3+k4)`,
+  qs:[
+    {type:"mc",
+     txt:"En el código, el vector de estado <code>s[i]</code> contiene:",
+     opts:["Solo la velocidad en el instante \\(i\\)","La posición y la velocidad en el instante \\(i\\): \\([x_i, v_i]\\)","La masa y la velocidad en el instante \\(i\\)","La aceleración y la posición en el instante \\(i\\)"],
+     ok:1,
+     fb:"CORRECTO. <code>s</code> es un arreglo 2D de forma <code>(n, 2)</code>. Cada fila <code>s[i]</code> contiene \\([x_i, v_i]\\), el vector de estado completo del sistema en el tiempo \\(t_i\\)."},
+    {type:"mc",
+     txt:"¿Qué retorna la función <code>f(t, s)</code> en el código RK4?",
+     opts:["La masa en el instante \\(t\\)","El vector de derivadas \\([dx/dt,\\; dv/dt]\\) = \\([v,\\; a]\\)","La energía mecánica total","La posición actualizada \\(x_{i+1}\\)"],
+     ok:1,
+     fb:"CORRECTO. <code>f</code> implementa el sistema de EDOs: retorna <code>np.array([dxdt, dvdt])</code> = \\([v,\\; a]\\), que son las derivadas del vector de estado. RK4 evalúa esta función cuatro veces por paso."},
+    {type:"vf",
+     txt:"La condición inicial del código es \\(x_0 = 0\\,\\text{m}\\) y \\(v_0 = 0\\,\\text{m/s}\\), lo que significa que el cohete parte del reposo desde la posición cero.",
+     ok:true,
+     fb:"VERDADERO. La línea <code>s[0]=[0, 0]</code> establece el vector de estado inicial: posición \\(x_0=0\\) m y velocidad \\(v_0=0\\) m/s. El cohete comienza en reposo en el origen."},
+    {type:"vf",
+     txt:"En el bucle RK4 del código, <code>k4</code> se evalúa en \\(t_i + h\\) usando la estimación <code>s[i] + h*k2</code>.",
+     ok:false,
+     fb:"FALSO. El código calcula <code>k4=f(t[i]+h, s[i]+h*k3)</code>. Se evalúa en el extremo del intervalo \\(t_i+h\\) pero usando la pendiente <code>k3</code> (no <code>k2</code>) para proyectar el estado."}
+  ]
+}
+
+};
+
+// ══════════════════════════════════════════════════════════
+//  CLAVE DE RESPUESTAS (del .tex)
+// Q1:b,b,V,empuje/peso/fricción | Q2:b,c,F,120 | Q3:b,b,V,...
+// Q4:b,b,V,m0/mf | Q5:c,b,V,reduce/reduce | Q6:c,b,V,gM/βM
+// Q7:c,b,V,aceleración/fricción | Q8:b,c,V,2h | Q9:b,b,V,explícito
+// Q10:b,b,F,dos/uno
+// ══════════════════════════════════════════════════════════
+
+const TIMER_SEC = 300; // 5 min por quiz
+
+// Mezcla un array aleatoriamente (Fisher-Yates)
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let S={
+  student:{},
+  selectedQ:[],
+  flat:[],
+  cur:0, answers:[], score:0,
+  t0:0, timer:null, tLeft:0, done:false,
+  qzBreak:{}
+};
+
+// ══════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function toggleQ(btn,n){
+  // No permitir seleccionar quizzes ya rendidos
+  if(btn.classList.contains('done')){
+    const ci=document.getElementById('i-ci').value.trim();
+    alert(`Ya rendiste Q${n} con CI ${ci||'(sin CI)'}. No puedes volver a rendirlo.`);
+    return;
+  }
+  btn.classList.toggle('on');
+  // Aplicar color si está on
+  if(btn.classList.contains('on')){
+    btn.style.borderColor=QZ_COLORS[n];
+    btn.style.color=QZ_COLORS[n];
+    btn.style.background=QZ_COLORS_L[n];
+  } else {
+    btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+  }
+  // No forzar ninguno si todos están deseleccionados
+}
+function getSelected(){
+  return [...document.querySelectorAll('.qsel-btn.on')]
+    .map(b=>parseInt(b.textContent.replace('Q','')));
+}
+
+// GitHub desde URL
+function ghToken(){ return new URLSearchParams(window.location.search).get('token')||''; }
+function ghRepo(){  return new URLSearchParams(window.location.search).get('repo')||''; }
+
+// ══════════════════════════════════════════════════════════
+//  RECORDS
+// ══════════════════════════════════════════════════════════
+const KEY='miniquiz_df_2026'; // ← cambiar KEY por tema
+function getRecs(){try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch{return[];}}
+function saveRec(r){const a=getRecs();a.push(r);a.sort((x,y)=>y.nota-x.nota);localStorage.setItem(KEY,JSON.stringify(a));}
+function doClr(){if(confirm('¿Eliminar todo el registro local?')){localStorage.removeItem(KEY);renderLB();}}
+
+// ── Quizzes ya rendidos por CI ──────────────────────────────
+// Devuelve Set de números de quiz ya rendidos por este CI
+function getDoneQuizzes(ci){
+  if(!ci) return new Set();
+  const recs=getRecs();
+  const done=new Set();
+  recs.filter(r=>r.ci===ci).forEach(r=>{
+    String(r.quizzes||'').split(',').forEach(q=>{
+      const n=parseInt(q.trim());
+      if(!isNaN(n)) done.add(n);
+    });
+  });
+  return done;
+}
+
+// Actualiza los botones de quiz marcando los ya rendidos
+function updateDoneBadges(){
+  const ci=document.getElementById('i-ci').value.trim();
+  const done=getDoneQuizzes(ci);
+  const note=document.getElementById('ci-note');
+
+  document.querySelectorAll('.qsel-btn').forEach(btn=>{
+    const n=parseInt(btn.textContent.replace('Q',''));
+    if(done.has(n)){
+      btn.classList.add('done');
+      btn.classList.remove('on');
+      btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+      btn.title=`Ya rendiste Q${n}`;
+    } else {
+      btn.classList.remove('done');
+      btn.title='';
+    }
+  });
+
+  if(ci){
+    note.classList.remove('show');
+    if(done.size>0){
+      const warn=document.getElementById('already-warn');
+      const warnTxt=document.getElementById('already-warn-txt');
+      warnTxt.textContent=`Ya rendiste: Q${[...done].sort((a,b)=>a-b).join(', Q')}. Esos quizzes no están disponibles.`;
+      warn.classList.add('show');
+    } else {
+      document.getElementById('already-warn').classList.remove('show');
+    }
+  } else {
+    note.classList.add('show');
+    document.getElementById('already-warn').classList.remove('show');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════
+window.addEventListener('load',()=>{
+  if(ghToken()&&ghRepo()){
+    document.getElementById('gh-info').classList.add('show');
+  }
+  // Mostrar nota de CI al cargar
+  document.getElementById('ci-note').classList.add('show');
+  // Aplicar colores a los botones de selección de quiz
+  document.querySelectorAll('.qsel-btn').forEach(btn=>{
+    const n=parseInt(btn.textContent.replace('Q',''));
+    btn.style.setProperty('--qc',QZ_COLORS[n]);
+    btn.addEventListener('click',()=>{
+      if(btn.classList.contains('on')){
+        btn.style.borderColor=QZ_COLORS[n];
+        btn.style.color=QZ_COLORS[n];
+        btn.style.background=QZ_COLORS_L[n];
+      } else {
+        btn.style.borderColor=''; btn.style.color=''; btn.style.background='';
+      }
+    });
+  });
+  // No se preselecciona ningún quiz
+});
+
+// ══════════════════════════════════════════════════════════
+//  PASSWORDS
+// ══════════════════════════════════════════════════════════
+// Default passwords: Q1="quiz1", Q2="quiz2", ... Q10="quiz10"
+// Teacher can override via URL: ?p1=abc&p2=def&...&p10=xyz
+function getQzPassword(n){
+  const url=new URLSearchParams(window.location.search);
+  // Contraseñas fáciles pero muy diferentes entre sí
+  // ← CAMBIAR contraseñas para cada nuevo tema
+  const defaults={
+    1:'veloc1',  2:'betas2',  3:'marte3',  4:'masa4',   5:'euler5',
+    6:'euler6',  7:'verlet7', 8:'verlet8', 9:'rk4-9',  10:'rk4-10'
+  };
+  return url.get('p'+n) || defaults[n] || ('quiz'+n);
+}
+
+let PW_PENDING_QZ=null; // which quizzes are waiting for password unlock
+let PW_UNLOCKED=new Set(); // already unlocked quiz numbers
+
+function askPasswords(qzNums, callback){
+  // Filter out already unlocked
+  const locked = qzNums.filter(n=>!PW_UNLOCKED.has(n));
+  if(!locked.length){ callback(); return; }
+  // Ask one by one
+  let idx=0;
+  function askNext(){
+    if(idx>=locked.length){ callback(); return; }
+    const qn=locked[idx];
+    const col=QZ_COLORS[qn];
+    const overlay=document.getElementById('pw-overlay');
+    document.getElementById('pw-icon').textContent='🔐';
+    document.getElementById('pw-title').textContent=`Quiz ${qn}: ${QUIZZES[qn].title}`;
+    document.getElementById('pw-title').style.color=col;
+    document.getElementById('pw-sub').textContent='Ingresa la contraseña para acceder a este quiz';
+    document.getElementById('pw-btn').style.background=col;
+    document.getElementById('pw-btn').style.color='#fff';
+    document.getElementById('pw-inp').value='';
+    document.getElementById('pw-err').style.display='none';
+    document.getElementById('pw-inp').classList.remove('error');
+    overlay.classList.remove('hidden');
+    PW_PENDING_QZ={qn, onOk:()=>{ PW_UNLOCKED.add(qn); idx++; askNext(); }};
+    setTimeout(()=>document.getElementById('pw-inp').focus(),100);
+  }
+  askNext();
+}
+
+function checkPassword(){
+  if(!PW_PENDING_QZ) return;
+  const {qn, onOk}=PW_PENDING_QZ;
+  const val=document.getElementById('pw-inp').value.trim();
+  if(val===getQzPassword(qn)){
+    document.getElementById('pw-overlay').classList.add('hidden');
+    PW_PENDING_QZ=null;
+    onOk();
+  } else {
+    const inp=document.getElementById('pw-inp');
+    inp.classList.add('error');
+    document.getElementById('pw-err').style.display='block';
+    setTimeout(()=>{inp.classList.remove('error');inp.value='';inp.focus();},600);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  BEGIN
+// ══════════════════════════════════════════════════════════
+function begin(){
+  const nm=document.getElementById('i-name').value.trim();
+  const ci=document.getElementById('i-ci').value.trim();
+  const sel=getSelected();
+  const er=document.getElementById('reg-err');
+  if(!nm||!ci||!sel.length){er.textContent='⚠ Completa todos los campos y selecciona al menos un quiz.';er.style.display='block';return;}
+  er.style.display='none';
+
+  // Filtrar quizzes ya rendidos por este CI
+  const done=getDoneQuizzes(ci);
+  const selFiltrado=sel.filter(n=>!done.has(n));
+
+  if(selFiltrado.length===0){
+    const er=document.getElementById('reg-err');
+    er.textContent='⚠ Ya rendiste todos los quizzes seleccionados. Elige otros.';
+    er.style.display='block';
+    return;
+  }
+
+  if(selFiltrado.length < sel.length){
+    const yaRendidos=sel.filter(n=>done.has(n));
+    const continuar=confirm(
+      `Ya rendiste Q${yaRendidos.join(', Q')}.\n\n`+
+      `Solo se abrirán los quizzes pendientes: Q${selFiltrado.join(', Q')}.\n\n`+
+      `¿Continuar?`
+    );
+    if(!continuar) return;
+  }
+
+  // Ask passwords for each selected quiz
+  askPasswords(selFiltrado, ()=>{
+    S.student={nm,ci};
+    S.selectedQ=selFiltrado;
+    S.flat=[];
+    selFiltrado.forEach(qn=>{
+      const qs=shuffle(QUIZZES[qn].qs); // orden aleatorio
+      qs.forEach((q,i)=>S.flat.push({qzNum:qn,qIdx:i,q}));
+    });
+    S.cur=0; S.answers=[]; S.score=0; S.done=false;
+    S.t0=Date.now();
+    S.tLeft=selFiltrado.length*TIMER_SEC;
+    S.qzBreak={};
+    selFiltrado.forEach(n=>S.qzBreak[n]={ok:0,tot:0});
+
+    show('s-quiz');
+    renderQ();
+    startTimer();
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  RENDER QUESTION
+// ══════════════════════════════════════════════════════════
+function renderQ(){
+  const {qzNum,qIdx,q}=S.flat[S.cur];
+  const n=S.cur+1; const tot=S.flat.length;
+  const col=QZ_COLORS[qzNum]; const colL=QZ_COLORS_L[qzNum];
+
+  // topbar
+  document.getElementById('qz-label').textContent=`Q${qzNum} · P${qIdx+1}`;
+  document.getElementById('qz-label').style.color=col;
+  document.getElementById('prog-fill').style.width=((n-1)/tot*100)+'%';
+  document.getElementById('prog-fill').style.background=col;
+
+  // header card
+  const typeMap={mc:'Opción Múltiple',vf:'Verdadero / Falso',fill:'Completar'};
+  const tag=document.getElementById('qtag');
+  tag.textContent=`Quiz ${qzNum}: ${QUIZZES[qzNum].title} · ${typeMap[q.type]}`;
+  tag.style.color=col;
+  document.getElementById('qcard').style.borderLeftColor=col;
+  document.getElementById('qcard').style.borderLeftWidth='4px';
+  document.getElementById('qcard').style.borderLeftStyle='solid';
+  document.getElementById('qnum').textContent=`Pregunta ${qIdx+1} de 4`;
+
+  // texto
+  document.getElementById('qtxt').innerHTML=q.txt;
+
+  // código si existe
+  const codeDiv=document.getElementById('qcode');
+  if(QUIZZES[qzNum].code && qIdx===0){
+    codeDiv.style.display='block';
+    codeDiv.innerHTML=`<div class="code-blk">${QUIZZES[qzNum].code}</div>`;
+  } else {
+    codeDiv.style.display='none';
+  }
+
+  // body
+  const body=document.getElementById('qbody');
+  body.innerHTML='';
+
+  if(q.type==='mc'){
+    const letters=['a','b','c','d'];
+    const wrap=document.createElement('div'); wrap.className='opts';
+    // Mezclar opciones manteniendo registro del índice original correcto
+    const idxs=shuffle([0,1,2,3].slice(0,q.opts.length));
+    // Actualizar el índice correcto según el nuevo orden
+    const newOk=idxs.indexOf(q.ok);
+    q._shuffledOpts=idxs.map(i=>q.opts[i]);
+    q._shuffledOk=newOk;
+    q._shuffledIdxs=idxs;
+    idxs.forEach((origIdx,displayIdx)=>{
+      const b=document.createElement('button');
+      b.className='opt-btn'; b.dataset.i=displayIdx; b.dataset.orig=origIdx;
+      b.innerHTML=`<span class="opt-key">${letters[displayIdx]})</span><span>${q.opts[origIdx]}</span>`;
+      b.onclick=()=>pickMC(b,displayIdx,col);
+      wrap.appendChild(b);
+    });
+    body.appendChild(wrap);
+
+  } else if(q.type==='vf'){
+    const wrap=document.createElement('div'); wrap.className='vf-row';
+    ['Verdadero','Falso'].forEach((lbl,i)=>{
+      const b=document.createElement('button');
+      b.className='vf-btn'; b.dataset.v=(i===0);
+      b.textContent=lbl;
+      b.onclick=()=>pickVF(b,i===0);
+      wrap.appendChild(b);
+    });
+    body.appendChild(wrap);
+
+  } else if(q.type==='fill'){
+    const inp=document.createElement('input');
+    inp.className='fill-inp'; inp.type='text';
+    inp.placeholder='Escribe tu respuesta...'; inp.id='fill-inp';
+    inp.onkeydown=e=>{if(e.key==='Enter'&&!S.done)submitFill();};
+    const sb=document.createElement('button');
+    sb.className='fill-submit'; sb.textContent='Confirmar';
+    sb.onclick=()=>submitFill();
+    body.appendChild(inp); body.appendChild(sb);
+  }
+
+  // reset feedback
+  const fb=document.getElementById('fb-box');
+  fb.className='fb-box';
+  document.getElementById('btn-next').disabled=true;
+  document.getElementById('live').textContent=S.score;
+  S.done=false;
+  // Render LaTeX in the question
+  if(window.MathJax){
+    const nodes=[
+      document.getElementById('qtxt'),
+      document.getElementById('qbody'),
+      document.getElementById('qcode')
+    ].filter(Boolean);
+    MathJax.typesetClear(nodes);
+    MathJax.typesetPromise(nodes);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  ANSWER HANDLERS
+// ══════════════════════════════════════════════════════════
+function pickMC(btn,idx,col){
+  if(S.done) return; S.done=true;
+  const {q}=S.flat[S.cur];
+  // Usar índice mezclado si existe, si no el original
+  const correctDisplayIdx = q._shuffledOk !== undefined ? q._shuffledOk : q.ok;
+  const isOk=idx===correctDisplayIdx;
+  if(isOk) S.score++;
+  document.querySelectorAll('.opt-btn').forEach(b=>{
+    b.disabled=true;
+    const i=parseInt(b.dataset.i);
+    const correctI = q._shuffledOk !== undefined ? q._shuffledOk : q.ok;
+    if(i===correctI) b.classList.add('ok');
+    else if(i===idx&&!isOk) b.classList.add('ko');
+  });
+  showFB(isOk,q.fb);
+  S.answers.push({type:'mc',given:idx,ok:q.ok,res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function pickVF(btn,val){
+  if(S.done) return; S.done=true;
+  const {q}=S.flat[S.cur];
+  const isOk=val===q.ok;
+  if(isOk) S.score++;
+  document.querySelectorAll('.vf-btn').forEach(b=>{
+    b.disabled=true;
+    const bv=b.dataset.v==='true';
+    if(bv===q.ok) b.classList.add('ok');
+    else if(bv===val&&!isOk) b.classList.add('ko');
+  });
+  showFB(isOk,q.fb);
+  S.answers.push({type:'vf',given:val,ok:q.ok,res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function submitFill(){
+  if(S.done) return;
+  const inp=document.getElementById('fill-inp');
+  const val=(inp?.value||'').trim().toLowerCase().replace(/\s+/g,' ');
+  S.done=true;
+  if(inp){inp.disabled=true;}
+  document.querySelectorAll('.fill-submit').forEach(b=>b.disabled=true);
+  const {q}=S.flat[S.cur];
+  const isOk=q.ok.some(a=>val.includes(a.toLowerCase()));
+  if(isOk) S.score++;
+  showFB(isOk,q.fb);
+  S.answers.push({type:'fill',given:val,ok:q.ok[0],res:isOk,q,qzNum:S.flat[S.cur].qzNum});
+  S.qzBreak[S.flat[S.cur].qzNum].tot++;
+  if(isOk) S.qzBreak[S.flat[S.cur].qzNum].ok++;
+  document.getElementById('btn-next').disabled=false;
+  document.getElementById('live').textContent=S.score;
+}
+
+function showFB(ok,txt){
+  const fb=document.getElementById('fb-box');
+  document.getElementById('fb-ico').textContent=ok?'✓':'✗';
+  document.getElementById('fb-txt').innerHTML=txt;
+  fb.className='fb-box show '+(ok?'ok':'ko');
+  // Re-render LaTeX in the feedback
+  if(window.MathJax){
+    MathJax.typesetClear([document.getElementById('fb-txt')]);
+    MathJax.typesetPromise([document.getElementById('fb-txt')]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  NEXT / FINISH
+// ══════════════════════════════════════════════════════════
+function nextQ(){
+  if(!S.done){
+    const {q,qzNum}=S.flat[S.cur];
+    S.answers.push({type:q.type,given:null,ok:q.type==='mc'?q.ok:q.ok,res:false,q,qzNum});
+    S.qzBreak[qzNum].tot++;
+  }
+  S.cur++;
+  if(S.cur>=S.flat.length){finish();return;}
+  renderQ();
+}
+
+function finish(){
+  clearInterval(S.timer);
+  const elapsed=Math.round((Date.now()-S.t0)/1000);
+  const tot=S.flat.length;
+  const ok=S.answers.filter(a=>a.res).length;
+  const nota=parseFloat((ok/tot*100).toFixed(1));
+  const pass=nota>=51;
+
+  const rec={
+    nm:S.student.nm, ci:S.student.ci,
+    nota, ok, tot, elapsed,
+    quizzes:S.selectedQ.join(','),
+    breakdown:S.qzBreak,
+    date:new Date().toLocaleString('es-BO')
+  };
+  saveRec(rec);
+
+  // resultados
+  document.getElementById('res-name').textContent=S.student.nm;
+  document.getElementById('res-ci').textContent=`CI: ${S.student.ci}`;
+  const gp=document.getElementById('gpct');
+  gp.textContent=nota+'%'; gp.className='gpct '+(pass?'pass':'fail');
+  document.getElementById('grade-ring').className='grade-ring '+(pass?'pass':'fail');
+  const vr=document.getElementById('res-verd');
+  vr.textContent=pass?'✓ APROBADO':'✗ REPROBADO';
+  vr.className='verd '+(pass?'pass':'fail');
+  document.getElementById('rs-ok').textContent=ok;
+  document.getElementById('rs-ko').textContent=tot-ok;
+  document.getElementById('rs-tot').textContent=tot;
+  document.getElementById('rs-t').textContent=elapsed+'s';
+
+  // puntaje por quiz
+  const qzEl=document.getElementById('qz-scores');
+  qzEl.innerHTML=S.selectedQ.map(n=>{
+    const b=S.qzBreak[n]||{ok:0,tot:0};
+    const pct=b.tot>0?(b.ok/b.tot*100).toFixed(0):0;
+    const col=QZ_COLORS[n]; const colL=QZ_COLORS_L[n];
+    return `<div class="qzs" style="background:${colL};border-color:${col}">
+      <div class="qzs-label" style="color:${col}">Q${n}</div>
+      <div class="qzs-val" style="color:${col}">${b.ok}/${b.tot}</div>
+      <div style="font-size:.58rem;color:${col}">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  // revisión
+  const revEl=document.getElementById('rev-list');
+  revEl.innerHTML=S.answers.map((a,i)=>{
+    const col=QZ_COLORS[a.qzNum];
+    // Para opciones múltiple mostrar la opción con LaTeX
+    // Para mc, usar los índices originales para mostrar texto correcto
+    const origGiven = (a.type==='mc' && a.q._shuffledIdxs)
+      ? a.q._shuffledIdxs[a.given]
+      : a.given;
+    const yt=a.given===null?'<em>Sin respuesta</em>':
+             a.type==='mc'?a.q.opts[origGiven]:
+             a.type==='vf'?(a.given?'Verdadero':'Falso'):
+             `<em>${a.given}</em>`;
+    const corr=a.type==='mc'?a.q.opts[a.q.ok]:
+               a.type==='vf'?(a.ok?'Verdadero':'Falso'):
+               `<em>${a.q.ok[0]}</em>`;
+    return `<div class="rev-item ${a.res?'ok':'ko'}" style="border-left-color:${col}">
+      <div class="rev-q">
+        <strong style="color:${col}">Q${a.qzNum} · P${S.flat[i].qIdx+1}</strong>
+        &nbsp;${a.q.txt}
+      </div>
+      <div class="rev-ans" style="margin-top:.4rem">
+        <span class="rev-yours">Tu respuesta: ${yt}</span>
+        ${!a.res?`<span class="rev-corr">✓ Correcta: ${corr}</span>`:''}
+      </div>
+      <div class="rev-expl">${a.q.fb}</div>
+    </div>`;
+  }).join('');
+
+  renderLB(rec.ci);
+  show('s-res');
+  saveToGitHub(rec);
+  // Actualizar badges de quizzes completados
+  updateDoneBadges();
+  // Render LaTeX en toda la pantalla de resultados
+  if(window.MathJax){
+    MathJax.typesetClear([document.getElementById('rev-list')]);
+    MathJax.typesetPromise([document.getElementById('rev-list')]);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  TIMER
+// ══════════════════════════════════════════════════════════
+function startTimer(){
+  updTimer();
+  S.timer=setInterval(()=>{
+    S.tLeft--; updTimer();
+    if(S.tLeft<=0){
+      clearInterval(S.timer);
+      if(!S.done) finish();
+    }
+  },1000);
+}
+function updTimer(){
+  const el=document.getElementById('timer-badge');
+  const m=Math.floor(S.tLeft/60); const s=S.tLeft%60;
+  el.textContent=`${m}:${s.toString().padStart(2,'0')}`;
+  el.className='timer-badge'+(S.tLeft<=30?' u':S.tLeft<=60?' w':'');
+}
+
+// ══════════════════════════════════════════════════════════
+//  LEADERBOARD
+// ══════════════════════════════════════════════════════════
+function renderLB(myCI){
+  const recs=getRecs(); const el=document.getElementById('lb-list');
+  if(!recs.length){
+    el.innerHTML='<div style="text-align:center;padding:1.2rem;color:var(--muted);font-size:.78rem">Sin registros aún.</div>';
+    return;
+  }
+  const medals=['🥇','🥈','🥉'];
+  el.innerHTML=recs.slice(0,20).map((r,i)=>{
+    const pass=r.nota>=51; const me=r.ci===myCI;
+    return `<div class="lb-row ${me?'me':''}">
+      <div class="lb-rank">${medals[i]||(i+1)}</div>
+      <div style="flex:1">
+        <div class="lb-name">${r.nm}</div>
+        <div class="lb-meta">CI: ${r.ci} · Q:${r.quizzes} · ${r.date}</div>
+      </div>
+      <div>
+        <div class="lb-nota ${pass?'pass':'fail'}">${r.nota}%</div>
+        <div class="lb-meta" style="text-align:right">${r.ok}/${r.tot} · ${r.elapsed}s</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+//  GITHUB SAVE
+// ══════════════════════════════════════════════════════════
+async function saveToGitHub(rec){
+  const dot=document.getElementById('gh-dot');
+  const msg=document.getElementById('gh-msg');
+  const token=ghToken(); const repo=ghRepo();
+  if(!token||!repo){
+    dot.style.background='#adb5bd';
+    msg.textContent='Sin token GitHub — nota guardada solo localmente.';
+    return;
+  }
+  dot.style.background='#ffd166';
+  msg.textContent='Guardando en GitHub...';
+  const body=[
+    `## Resultado del Mini Quiz`,``,
+    `| Campo | Valor |`,`|---|---|`,
+    `| **Nombre** | ${rec.nm} |`,
+    `| **CI** | ${rec.ci} |`,
+
+    `| **Nota** | ${rec.nota}% (${rec.ok}/${rec.tot}) |`,
+    `| **Estado** | ${rec.nota>=51?'✅ APROBADO':'❌ REPROBADO'} |`,
+    `| **Quizzes** | Q${rec.quizzes} |`,
+    `| **Tiempo** | ${rec.elapsed}s |`,
+    `| **Fecha** | ${rec.date} |`,
+    ``,`### Desglose`,
+    ...Object.entries(rec.breakdown).map(([n,b])=>`- Q${n}: ${b.ok}/${b.tot} (${b.tot>0?(b.ok/b.tot*100).toFixed(0):0}%)`),
+    ``,`\`\`\`json`,JSON.stringify(rec,null,2),`\`\`\``
+  ].join('\n');
+  try{
+    const r=await fetch(`https://api.github.com/repos/${repo}/issues`,{
+      method:'POST',
+      headers:{'Authorization':`token ${token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'},
+      body:JSON.stringify({title:`[Quiz] ${rec.nm} · CI:${rec.ci} · ${rec.nota}% · ${rec.date}`,body,labels:['quiz-nota']})
+    });
+    if(r.ok){
+      const d=await r.json();
+      dot.style.background='#2D6A4F';
+      msg.innerHTML=`✓ Guardado · Issue #${d.number} · <a href="${d.html_url}" target="_blank" style="color:#2D6A4F">Ver en GitHub →</a>`;
+    } else { throw new Error('HTTP '+r.status); }
+  }catch(e){
+    dot.style.background='#E63946';
+    msg.textContent='Error al guardar en GitHub: '+e.message;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  CSV + RETRY
+// ══════════════════════════════════════════════════════════
+function doCSV(){
+  const recs=getRecs(); if(!recs.length){alert('No hay registros.');return;}
+  const h='Nombre,CI,Nota(%),Correctas,Total,Tiempo(s),Quizzes,Fecha';
+  const rows=recs.map(r=>`"${r.nm}","${r.ci}",${r.nota},${r.ok},${r.tot},${r.elapsed},"${r.quizzes}","${r.date}"`);
+  const blob=new Blob([[h,...rows].join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`notas_miniquiz_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+function retry(){
+  document.getElementById('i-name').value=S.student.nm||'';
+  document.getElementById('i-ci').value=S.student.ci||'';
+  
+  document.querySelectorAll('.qsel-btn').forEach(b=>{
+    b.classList.remove('on'); b.style.borderColor=''; b.style.color=''; b.style.background='';
+  });
+  // No preseleccionar ningún quiz al reintentar
+  show('s-reg');
+}
+</script>
+</body>
+</html>
